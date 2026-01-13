@@ -1,0 +1,52 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Unix V6 Kernel",
+            "type": "shell",
+            "command": "make",
+            "args": ["build"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/kernel",
+                "env": {
+                    "PATH": "/opt/cross/bin:${env:PATH}"
+                }
+            },
+            "problemMatcher": ["$gcc"],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Clean Kernel",
+            "type": "shell",
+            "command": "make",
+            "args": ["clean"],
+            "options": {
+                "cwd": "${workspaceFolder}/kernel"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build ISO",
+            "type": "shell",
+            "command": "make",
+            "args": ["iso"],
+            "options": {
+                "cwd": "${workspaceFolder}/kernel",
+                "env": {
+                    "PATH": "/opt/cross/bin:${env:PATH}"
+                }
+            },
+            "problemMatcher": ["$gcc"],
+            "dependsOn": ["Build Unix V6 Kernel"]
+        }
+    ]
+}
