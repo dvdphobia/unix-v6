@@ -35,6 +35,7 @@ idt_descriptor:
 
 /* Global Descriptor Table */
 .align 16
+.global gdt
 gdt:
     .quad 0x0000000000000000    /* Null segment */
 gdt_code:
@@ -64,11 +65,6 @@ gdt_descriptor:
 _start:
     cli                         /* Disable interrupts */
     
-    /* Debug: Print '!' to serial port to confirm boot */
-    mov $0x3F8, %dx
-    mov $'!', %al
-    out %al, %dx
-
     /* Setup kernel stack */
     movl $kernel_stack_top, %esp
     xorl %ebp, %ebp
@@ -178,6 +174,13 @@ isr_default:
     pushl $255
     jmp isr_common
 
+/* Syscall handler (0x80) */
+.global isr_syscall
+isr_syscall:
+    pushl $0
+    pushl $0x80
+    jmp isr_common
+
 /* Table of ISRs */
 .section .data
 isr_table:
@@ -206,10 +209,17 @@ setup_idt:
     
 .setup_idt_loop:
     /* Get handler address */
+    /* Check for syscall vector 0x80 */
+    cmpl $0x80, %ebx
+    je .use_syscall
+    
     cmpl $48, %ebx
     jge .use_default
     movl (%esi), %eax
     addl $4, %esi
+    jmp .got_handler
+.use_syscall:
+    movl $isr_syscall, %eax
     jmp .got_handler
 .use_default:
     movl $isr_default, %eax
@@ -225,7 +235,13 @@ setup_idt:
     movb $0, 4(%edi)
     
     /* Type: 32-bit interrupt gate, DPL=0, Present */
-    movb $0x8E, 5(%edi)
+    /* For vector 0x80 (syscall), set DPL=3 to allow user access */
+    movb $0x8E, %cl
+    cmpl $0x80, %ebx
+    jne .not_syscall
+    movb $0xEE, %cl
+.not_syscall:
+    movb %cl, 5(%edi)
     
     /* High 16 bits of handler address */
     shrl $16, %eax
@@ -355,13 +371,95 @@ splx:
  * Context switch support
  */
 
+/*
+ * switch_stack_and_call(new_esp, func)
+ * Switch to a new stack and jump to func. Does not return.
+ */
+.global switch_stack_and_call
+switch_stack_and_call:
+    movl 4(%esp), %eax          /* new stack pointer */
+    movl 8(%esp), %edx          /* function pointer */
+    movl %eax, %esp
+    xorl %ebp, %ebp
+    jmp *%edx
+
 /* savu - Save current context into user structure */
 .global savu
 savu:
     movl 4(%esp), %eax          /* Address to save to */
     movl %esp, (%eax)           /* Save ESP */
     movl %ebp, 4(%eax)          /* Save EBP */
+    movl %ebx, 8(%eax)          /* Save EBX */
+    movl %esi, 12(%eax)         /* Save ESI */
+    movl %edi, 16(%eax)         /* Save EDI */
     xorl %eax, %eax             /* Return 0 */
+    ret
+
+/*
+ * savu_and_copy(rsav_ptr, src, dest, count_dwords)
+ * 
+ * Saves current context to rsav_ptr, then copies count_dwords from src to dest.
+ * This is atomic with no C compiler code between save and copy.
+ *
+ * Returns 0 for parent, 1 when child resumes via switch_context.
+ *
+ * CRITICAL: The saved ESP must point to where the return address is,
+ * so that switch_context's 'ret' jumps to the right place.
+ */
+.global savu_and_copy
+savu_and_copy:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %edi
+    pushl %esi
+    pushl %ebx
+    
+    /* Load arguments */
+    movl $u, %edx               /* rsav_ptr = &u.u_rsav (Hardcoded) */
+    /* 8(%ebp) ignored */
+    movl 12(%ebp), %esi         /* src (&u) */
+    movl 16(%ebp), %edi         /* dest (child_u) */
+    movl 20(%ebp), %ecx         /* count (dwords) */
+    
+    
+    /* Save context to rsav_ptr
+     * 
+     * We save ESP as it will be RIGHT BEFORE our 'ret' instruction.
+     * At that point: ESP = EBP + 4 (after popping EBP, before ret)
+     * Actually simpler: ESP at ret time = original ESP (before call pushed ret addr)
+     * which is EBP + 8 in our frame.
+     * 
+     * When switch_context restores this and does 'ret', it will pop our
+     * return address and jump back to newproc.
+     * 
+     * ERROR FIX: We must also save the CALLER'S EBP, not our current EBP.
+     * Our current EBP points to our frame. We want to resume in the caller's frame.
+     * Caller's EBP is saved at (%ebp).
+     */
+    leal 4(%ebp), %eax          /* ESP pointing to return address */
+    movl %eax, (%edx)           /* Save adjusted ESP */
+    
+    movl (%ebp), %eax           /* Get CALLER'S EBP (saved on stack) */
+    movl %eax, 4(%edx)          /* Save correct EBP */
+    
+    movl -12(%ebp), %eax        /* Get saved EBX */
+    movl %eax, 8(%edx)
+    movl -8(%ebp), %eax         /* Get saved ESI */
+    movl %eax, 12(%edx)
+    movl -4(%ebp), %eax         /* Get saved EDI */
+    movl %eax, 16(%edx)
+    
+    /* Copy src to dest - dword at a time */
+    cld
+    rep movsl
+    
+    /* Return 0 (parent) */
+    xorl %eax, %eax
+    
+    popl %ebx
+    popl %esi
+    popl %edi
+    popl %ebp
     ret
 
 /* retu - Restore context from user structure */
@@ -370,7 +468,107 @@ retu:
     movl 4(%esp), %eax          /* Address to restore from */
     movl (%eax), %esp           /* Restore ESP */
     movl 4(%eax), %ebp          /* Restore EBP */
+    movl 8(%eax), %ebx          /* Restore EBX */
+    movl 12(%eax), %esi         /* Restore ESI */
+    movl 16(%eax), %edi         /* Restore EDI */
     movl $1, %eax               /* Return 1 */
+    ret
+
+/*
+ * switch_context(dest, src, count, new_rsav)
+ * Copy count dwords from src to dest, then restore context from new_rsav and return 1.
+ * This is used for context switch when bcopy would corrupt the current stack.
+ */
+.global switch_context
+switch_context:
+    movl 4(%esp), %edi          /* dest */
+    movl 8(%esp), %esi          /* src */
+    movl 12(%esp), %ecx         /* count (dwords) */
+    movl 16(%esp), %edx         /* new_rsav pointer */
+    
+    cld
+    rep movsl                   /* copy - this clobbers stack usage but we have regs */
+    
+    /* Restore context from new_rsav (in EDX) */
+    movl (%edx), %esp           /* Restore ESP */
+    movl 4(%edx), %ebp          /* Restore EBP */
+    movl 8(%edx), %ebx          /* Restore EBX */
+    /* Note: ESI and EDI were clobbered by movsl, but we restore them now */
+    movl 12(%edx), %esi         /* Restore ESI */
+    movl 16(%edx), %edi         /* Restore EDI */
+    
+    movl $0x12345678, %eax      /* return magic */
+    ret
+
+/*
+ * savu_switch(rsav, old_uarea_dest, new_uarea_src, uarea_size_dwords)
+ * 
+ * Atomically:
+ * 1. Save current context to rsav (returns 0 normally, non-zero when resumed)
+ * 2. Copy current u-area (&u) to old_uarea_dest
+ * 3. Copy new_uarea_src to &u
+ * 4. Restore context from the new u.u_rsav
+ *
+ * The key is that we save ESP pointing to OUR return address, then immediately
+ * do all copies without any C stack frame changes, then restore the new context.
+ * When resumed, we return non-zero through the saved context.
+ */
+.global savu_switch
+savu_switch:
+    /* Create a minimal stack frame */
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %edi
+    pushl %esi
+    pushl %ebx
+    
+    /* Load arguments into registers */
+    movl $u, %edx               /* rsav = &u.u_rsav (Hardcoded) */
+    /* 8(%ebp) was rsav arg, ignored */
+    movl 12(%ebp), %eax         /* old_uarea_dest */
+    /* 16(%ebp) = new_uarea_src */
+    /* 20(%ebp) = uarea_size_dwords */
+    
+    /* Save context to rsav
+     * We save ESP as it will be at return time: after popping ebx,esi,edi,ebp
+     * That's ebp+4 (pointing to return address)
+     */
+    leal 4(%ebp), %ecx
+    movl %ecx, (%edx)           /* rsav[0] = ESP at return */
+    
+    movl (%ebp), %ecx           /* caller's saved EBP */
+    movl %ecx, 4(%edx)          /* rsav[1] = caller's EBP */
+    
+    /* Save callee-saved registers as they were on entry */
+    movl -4(%ebp), %ecx         /* saved EDI */
+    movl %ecx, 16(%edx)
+    movl -8(%ebp), %ecx         /* saved ESI */
+    movl %ecx, 12(%edx)
+    movl -12(%ebp), %ecx        /* saved EBX */
+    movl %ecx, 8(%edx)
+    
+    /* Now copy old u-area to storage: memcpy(old_uarea_dest, &u, size) */
+    movl 20(%ebp), %ecx         /* size in dwords */
+    movl $u, %esi               /* src = &u */
+    movl %eax, %edi             /* dest = old_uarea_dest */
+    cld
+    rep movsl
+    
+    /* Copy new u-area from storage: memcpy(&u, new_uarea_src, size) */
+    movl 20(%ebp), %ecx         /* size in dwords */
+    movl 16(%ebp), %esi         /* src = new_uarea_src */
+    movl $u, %edi               /* dest = &u */
+    rep movsl
+    
+    /* Restore context from NEW u.u_rsav (now in global u) */
+    movl $u, %edx               /* new_rsav = &u.u_rsav */
+    movl (%edx), %esp           /* Restore ESP */
+    movl 4(%edx), %ebp          /* Restore EBP */
+    movl 8(%edx), %ebx          /* Restore EBX */
+    movl 12(%edx), %esi         /* Restore ESI */
+    movl 16(%edx), %edi         /* Restore EDI */
+    
+    movl $1, %eax               /* Return 1 (resumed) */
     ret
 
 /* aretu - Transfer control to saved label (for signals) */
@@ -379,6 +577,10 @@ aretu:
     movl 4(%esp), %eax          /* Address of saved context */
     movl (%eax), %esp           /* Restore ESP */
     movl 4(%eax), %ebp          /* Restore EBP */
+    movl 8(%eax), %ebx          /* Restore EBX */
+    movl 12(%eax), %esi         /* Restore ESI */
+    movl 16(%eax), %edi         /* Restore EDI */
+    movl $1, %eax               /* Return 1 */
     ret
 
 /* setjmp/longjmp equivalents for V6 */
@@ -451,47 +653,41 @@ bzero:
     ret
 
 /*
- * User/Kernel memory access (simplified - assumes flat memory model)
+ * User/Kernel memory access - Implemented in C (slp.c/sys.c)
+ * because we need to add the per-process relocation offset 
+ * which is managed by software in this flat kernel model.
  */
 
-/* fubyte - Fetch byte from user space */
-.global fubyte
-fubyte:
-    movl 4(%esp), %eax
-    movzbl (%eax), %eax
-    ret
-
-/* fuword - Fetch word from user space */
-.global fuword
-fuword:
-    movl 4(%esp), %eax
-    movl (%eax), %eax
-    ret
-
-/* fuiword - Fetch instruction word from user space */
-.global fuiword
-fuiword:
-    movl 4(%esp), %eax
-    movl (%eax), %eax
-    ret
-
-/* subyte - Store byte to user space */
-.global subyte
-subyte:
-    movl 4(%esp), %eax
-    movl 8(%esp), %edx
-    movb %dl, (%eax)
-    xorl %eax, %eax
-    ret
-
-/* suword - Store word to user space */
-.global suword
-suword:
-    movl 4(%esp), %eax
-    movl 8(%esp), %edx
-    movl %edx, (%eax)
-    xorl %eax, %eax
-    ret
+/*
+ * return_to_user(eip, esp)
+ * Switches to user mode and executes code at eip with stack esp
+ */
+/*
+ * return_to_user(eip, esp)
+ * Switches to user mode and executes code at eip with stack esp
+ */
+.global return_to_user
+return_to_user:
+    movl 4(%esp), %ebx  /* eip */
+    movl 8(%esp), %ecx  /* esp */
+    
+    /* Set up segments for user mode */
+    movw $0x23, %ax     /* User Data (Index 4, RPL 3) = 0x20 | 3 = 0x23 */
+    movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %fs
+    movw %ax, %gs
+    
+    /* Push stack frame for IRET */
+    /* Stack: SS, ESP, EFLAGS, CS, EIP */
+    pushl $0x23         /* SS (User Data) */
+    pushl %ecx          /* ESP */
+    pushfl              /* EFLAGS */
+    orl $0x200, (%esp)  /* Enable Interrupts (IF) */
+    pushl $0x1B         /* CS (User Code: Index 3, RPL 3) = 0x18 | 3 = 0x1B */
+    pushl %ebx          /* EIP */
+    
+    iret
 
 /*
  * I/O Port operations

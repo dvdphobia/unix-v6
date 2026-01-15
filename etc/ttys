@@ -1,0 +1,9 @@
+# /etc/ttys - Terminal Configuration
+# Unix V6 x86 Port
+#
+# Format: terminal secure|insecure type
+#
+# In original V6, this controlled which terminals
+# allowed root login and what getty to spawn.
+
+console secure vt100

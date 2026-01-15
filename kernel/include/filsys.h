@@ -32,17 +32,18 @@ struct filsys {
 
 /*
  * Structure of an on-disk inode (32 bytes in V6)
+ * Must match exactly what's written to disk.
  */
 struct dinode {
-    mode_t      di_mode;        /* File type and permissions */
+    uint16_t    di_mode;        /* File type and permissions */
     int8_t      di_nlink;       /* Number of links */
-    uid_t       di_uid;         /* Owner user ID */
-    gid_t       di_gid;         /* Owner group ID */
+    uint8_t     di_uid;         /* Owner user ID */
+    uint8_t     di_gid;         /* Owner group ID */
     uint8_t     di_size0;       /* High byte of size */
     uint16_t    di_size1;       /* Low 16 bits of size */
     uint16_t    di_addr[8];     /* Block addresses (encoded) */
-    time_t      di_atime;       /* Access time */
-    time_t      di_mtime;       /* Modification time */
+    uint16_t    di_atime[2];    /* Access time (2x16 bit) */
+    uint16_t    di_mtime[2];    /* Modification time (2x16 bit) */
 };
 
 /*

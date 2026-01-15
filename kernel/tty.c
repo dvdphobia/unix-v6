@@ -48,6 +48,8 @@ struct cblock *cfreelist;
 static int vga_row = 0;
 static int vga_col = 0;
 
+static void vga_putc(int c);
+
 /* Console TTY structure */
 struct tty cons_tty;
 
@@ -115,6 +117,7 @@ void cinit(void) {
     cons_tty.t_outq.c_cf = NULL;
     cons_tty.t_outq.c_cl = NULL;
     
+    (void)maptab;
     printf("cinit: %d character devices, %d cblocks\n", nchrdev, NCLIST);
 }
 
@@ -240,7 +243,6 @@ void wflushtty(struct tty *tp) {
  * or until any character has been typed in raw mode.
  */
 int canon(struct tty *tp) {
-    char *bp;
     int c, mc;
     int s;
     
@@ -441,9 +443,15 @@ void ttyinput(int c, struct tty *tp) {
         return;
     }
     
-    /* Echo */
     if (tp->t_flags & ECHO) {
-        ttyoutput(c, tp);
+        /* Visual erase for backspace */
+        if (c == tp->t_erase) {
+            ttyoutput('\b', tp);
+            ttyoutput(' ', tp);
+            ttyoutput('\b', tp);
+        } else {
+            ttyoutput(c, tp);
+        }
         ttstart(tp);
     }
     
@@ -576,7 +584,7 @@ void sgtty(int *v) {
     struct file *fp;
     struct inode *ip;
     
-    fp = getf(u.u_ar0[0]);
+    fp = getf(u.u_arg[0]);
     if (fp == NULL) {
         return;
     }

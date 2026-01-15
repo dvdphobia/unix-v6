@@ -1,0 +1,25 @@
+# Build directories
+build/
+kernel/isodir/
+
+# Generated binaries and ISOs
+*.elf
+*.bin
+*.iso
+*.o
+
+# Generated headers
+kernel/drivers/block/ramdisk_files.h
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+*.swp
+*~
+a.out
+symbols.txt
+kernel/symbols.txt
+

@@ -30,6 +30,7 @@ extern void bwrite(struct buf *bp);
 extern struct filsys *getfs(dev_t dev);
 extern void bfree(dev_t dev, daddr_t bno);
 extern void ifree(dev_t dev, ino_t ino);
+extern void wdir(struct inode *ip);
 
 /*
  * iget - Look up an inode by device and inode number
@@ -44,7 +45,6 @@ struct inode *iget(dev_t dev, ino_t ino) {
     struct mount *mp;
     struct buf *bp;
     struct dinode *dp;
-    int *ip1, *ip2;
     int i;
 
 loop:
@@ -136,9 +136,14 @@ loop:
  * truncate and deallocate the file.
  */
 void iput(struct inode *p) {
+    if (p == NULL) {
+        return;
+    }
+    
+    p->i_flag |= ILOCK;
+    
     if (p->i_count == 1) {
-        p->i_flag |= ILOCK;
-        
+        /* Last reference - handle cleanup */
         if (p->i_nlink <= 0) {
             itrunc(p);
             p->i_mode = 0;
@@ -146,11 +151,13 @@ void iput(struct inode *p) {
         }
         
         iupdat(p, time);
-        prele(p);
         p->i_flag = 0;
-        p->i_number = 0;
+        p->i_count = 0;
+        p->i_number = 0;  /* Mark slot as free AFTER count is 0 */
+        return;
     }
     
+    /* Not last reference - just decrement and unlock */
     p->i_count--;
     prele(p);
 }
@@ -198,12 +205,14 @@ void iupdat(struct inode *p, time_t *tm) {
         dp->di_addr[i] = p->i_addr[i];
     }
     
-    /* Update times */
+    /* Update times - di_atime and di_mtime are uint16_t[2] arrays */
     if (p->i_flag & IACC) {
-        dp->di_atime = tm[1];
+        dp->di_atime[0] = (uint16_t)(tm[1] >> 16);
+        dp->di_atime[1] = (uint16_t)(tm[1] & 0xFFFF);
     }
     if (p->i_flag & IUPD) {
-        dp->di_mtime = tm[1];
+        dp->di_mtime[0] = (uint16_t)(tm[1] >> 16);
+        dp->di_mtime[1] = (uint16_t)(tm[1] & 0xFFFF);
     }
     
     bwrite(bp);

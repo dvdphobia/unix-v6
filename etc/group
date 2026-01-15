@@ -1,0 +1,8 @@
+# /etc/group - Group Database
+# Unix V6 x86 Port
+#
+# Format: groupname:password:gid:members
+
+wheel:*:0:root
+daemon:*:1:
+operator:*:5:root

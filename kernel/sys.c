@@ -16,6 +16,8 @@
 #include "include/buf.h"
 #include "include/reg.h"
 #include "include/conf.h"
+#include "include/filsys.h"
+#include "include/text.h"
 
 /* External declarations */
 extern struct user u;
@@ -38,6 +40,7 @@ extern void closef(struct file *fp);
 extern struct file *getf(int fd);
 extern struct file *falloc(void);
 extern void readi(struct inode *ip);
+extern int estabur(int nt, int nd, int ns, int sep);
 extern void writei(struct inode *ip);
 extern void wakeup(void *chan);
 extern void sleep(void *chan, int pri);
@@ -78,7 +81,7 @@ void rdwr(int mode) {
     struct file *fp;
     int fd;
     
-    fd = u.u_ar0[EAX];
+    fd = u.u_arg[0];
     fp = getf(fd);
     if (fp == NULL) {
         return;
@@ -89,8 +92,8 @@ void rdwr(int mode) {
         return;
     }
     
-    u.u_base = (caddr_t)u.u_arg[0];
-    u.u_count = u.u_arg[1];
+    u.u_base = (caddr_t)u.u_arg[1];
+    u.u_count = u.u_arg[2];
     u.u_segflg = 0;
     
     if (fp->f_flag & FPIPE) {
@@ -110,7 +113,7 @@ void rdwr(int mode) {
         }
         
         /* Update file offset */
-        int xfer = u.u_arg[1] - u.u_count;
+        int xfer = u.u_arg[2] - u.u_count;
         fp->f_offset[1] += xfer;
         /* Handle overflow */
         if (fp->f_offset[1] < xfer) {
@@ -119,7 +122,7 @@ void rdwr(int mode) {
     }
     
     /* Return number of bytes transferred */
-    u.u_ar0[EAX] = u.u_arg[1] - u.u_count;
+    u.u_ar0[EAX] = u.u_arg[2] - u.u_count;
 }
 
 /*
@@ -128,8 +131,13 @@ void rdwr(int mode) {
 int sysopen(void) {
     struct inode *ip;
     
+    u.u_dirp = (caddr_t)u.u_arg[0];
     ip = namei(uchar, 0);
     if (ip == NULL) {
+        /* Only print if u_error is unexpected? ENOENT (2) is common. */
+        if (u.u_error != ENOENT) {
+            printf("open: namei failed u_error=%d\n", u.u_error);
+        }
         return -1;
     }
     
@@ -144,6 +152,7 @@ int sysopen(void) {
 int creat(void) {
     struct inode *ip;
     
+    u.u_dirp = (caddr_t)u.u_arg[0];
     ip = namei(uchar, 1);  /* Create mode */
     if (ip == NULL) {
         if (u.u_error) {
@@ -223,7 +232,7 @@ int sysclose(void) {
     struct file *fp;
     int fd;
     
-    fd = u.u_ar0[EAX];
+    fd = u.u_arg[0];
     fp = getf(fd);
     if (fp == NULL) {
         return -1;
@@ -243,7 +252,7 @@ int seek(void) {
     off_t n[2];
     uint32_t fsize;
     
-    fp = getf(u.u_ar0[EAX]);
+    fp = getf(u.u_arg[0]);
     if (fp == NULL) {
         return -1;
     }
@@ -303,8 +312,10 @@ int seek(void) {
 int link(void) {
     struct inode *ip, *xp;
     
+    u.u_dirp = (caddr_t)u.u_arg[0];
     ip = namei(uchar, 0);
     if (ip == NULL) {
+        printf("exec: namei failed u_error=%d\n", u.u_error);
         return -1;
     }
     
@@ -351,6 +362,7 @@ out:
 int unlink(void) {
     struct inode *ip;
     
+    u.u_dirp = (caddr_t)u.u_arg[0];
     ip = namei(uchar, 2);  /* Delete mode */
     if (ip == NULL) {
         return -1;
@@ -380,6 +392,7 @@ int unlink(void) {
 int chdir(void) {
     struct inode *ip;
     
+    u.u_dirp = (caddr_t)u.u_arg[0];
     ip = namei(uchar, 0);
     if (ip == NULL) {
         return -1;
@@ -408,6 +421,7 @@ int chdir(void) {
 int chmod(void) {
     struct inode *ip;
     
+    u.u_dirp = (caddr_t)u.u_arg[0];
     ip = namei(uchar, 0);
     if (ip == NULL) {
         return -1;
@@ -442,6 +456,7 @@ int chown(void) {
         return -1;
     }
     
+    u.u_dirp = (caddr_t)u.u_arg[0];
     ip = namei(uchar, 0);
     if (ip == NULL) {
         return -1;
@@ -460,6 +475,7 @@ int chown(void) {
 int stat(void) {
     struct inode *ip;
     
+    u.u_dirp = (caddr_t)u.u_arg[0];
     ip = namei(uchar, 0);
     if (ip == NULL) {
         return -1;
@@ -476,7 +492,7 @@ int stat(void) {
 int fstat(void) {
     struct file *fp;
     
-    fp = getf(u.u_ar0[EAX]);
+    fp = getf(u.u_arg[0]);
     if (fp == NULL) {
         return -1;
     }
@@ -534,7 +550,7 @@ int dup(void) {
     int fd;
     int i;
     
-    fd = u.u_ar0[EAX];
+    fd = u.u_arg[0];
     fp = getf(fd);
     if (fp == NULL) {
         return -1;
@@ -584,7 +600,7 @@ int getgid(void) {
 int setuid(void) {
     int uid;
     
-    uid = u.u_ar0[EAX];
+    uid = u.u_arg[0];
     
     if (u.u_ruid == uid || u.u_uid == 0) {
         u.u_uid = uid;
@@ -603,7 +619,7 @@ int setuid(void) {
 int setgid(void) {
     int gid;
     
-    gid = u.u_ar0[EAX];
+    gid = u.u_arg[0];
     
     if (u.u_rgid == gid || u.u_uid == 0) {
         u.u_gid = gid;
@@ -633,8 +649,8 @@ int stime(void) {
         return -1;
     }
     
-    time[0] = u.u_ar0[EAX];
-    time[1] = u.u_ar0[EDX];
+    time[0] = u.u_arg[0];
+    time[1] = u.u_arg[1];
     return 0;
 }
 
@@ -652,7 +668,7 @@ int sync(void) {
 int nice(void) {
     int n;
     
-    n = u.u_ar0[EAX];
+    n = u.u_arg[0];
     
     if (n < 0 && u.u_uid != 0) {
         n = 0;
@@ -698,7 +714,7 @@ int times(void) {
 int sslep(void) {
     int n;
     
-    n = u.u_ar0[EAX];
+    n = u.u_arg[0];
     
     while (n > 0) {
         sleep(&u, PSLEP);
@@ -719,6 +735,7 @@ int mknod(void) {
         return -1;
     }
     
+    u.u_dirp = (caddr_t)u.u_arg[0];
     ip = namei(uchar, 1);
     if (ip != NULL) {
         u.u_error = EEXIST;
@@ -761,18 +778,148 @@ int sbreak(void) {
  * smount - Mount file system
  */
 int smount(void) {
-    /* TODO: Implement mount */
-    u.u_error = EPERM;
-    return -1;
+    struct inode *ip;
+    struct inode *dp;
+    struct mount *mp;
+    struct buf *bp = NULL;
+    struct buf *cp;
+    struct filsys *fp;
+    dev_t dev;
+
+    if (!suser()) {
+        return -1;
+    }
+
+    /* Get special device */
+    u.u_dirp = (caddr_t)u.u_arg[0];
+    ip = namei(uchar, 0);
+    if (ip == NULL) {
+        return -1;
+    }
+    if ((ip->i_mode & IFMT) != IFBLK) {
+        u.u_error = ENOTBLK;
+        iput(ip);
+        return -1;
+    }
+    dev = ip->i_addr[0];
+    iput(ip);
+
+    /* Get mount point */
+    u.u_dirp = (caddr_t)u.u_arg[1];
+    dp = namei(uchar, 0);
+    if (dp == NULL) {
+        return -1;
+    }
+    if ((dp->i_mode & IFMT) != IFDIR) {
+        u.u_error = ENOTDIR;
+        iput(dp);
+        return -1;
+    }
+    if (dp->i_flag & IMOUNT) {
+        u.u_error = EBUSY;
+        iput(dp);
+        return -1;
+    }
+
+    /* Find free mount slot */
+    mp = NULL;
+    for (struct mount *m = &mount[0]; m < &mount[NMOUNT]; m++) {
+        if (m->m_bufp == NULL) {
+            mp = m;
+            break;
+        }
+    }
+    if (mp == NULL) {
+        u.u_error = ENFILE;
+        iput(dp);
+        return -1;
+    }
+
+    /* Open device and read superblock */
+    if (bdevsw[major(dev)].d_open) {
+        (*bdevsw[major(dev)].d_open)(dev, 1);
+    }
+    bp = bread(dev, 1);
+    if (bp == NULL || (bp->b_flags & B_ERROR)) {
+        if (bp) brelse(bp);
+        u.u_error = EIO;
+        iput(dp);
+        return -1;
+    }
+
+    cp = getblk(NODEV, 0);
+    bcopy(bp->b_addr, cp->b_addr, BSIZE);
+    brelse(bp);
+
+    fp = (struct filsys *)cp->b_addr;
+    if (u.u_arg[2]) {
+        fp->s_ronly = 1;
+    }
+
+    mp->m_bufp = cp;
+    mp->m_dev = dev;
+    mp->m_inodp = dp;
+    dp->i_flag |= IMOUNT;
+    prele(dp);
+    return 0;
 }
 
 /*
  * sumount - Unmount file system
  */
 int sumount(void) {
-    /* TODO: Implement umount */
-    u.u_error = EPERM;
-    return -1;
+    struct inode *ip;
+    struct mount *mp;
+    dev_t dev;
+
+    if (!suser()) {
+        return -1;
+    }
+
+    u.u_dirp = (caddr_t)u.u_arg[0];
+    ip = namei(uchar, 0);
+    if (ip == NULL) {
+        return -1;
+    }
+    if ((ip->i_mode & IFMT) != IFBLK) {
+        u.u_error = ENOTBLK;
+        iput(ip);
+        return -1;
+    }
+    dev = ip->i_addr[0];
+    iput(ip);
+
+    mp = NULL;
+    for (struct mount *m = &mount[0]; m < &mount[NMOUNT]; m++) {
+        if (m->m_bufp && m->m_dev == dev) {
+            mp = m;
+            break;
+        }
+    }
+    if (mp == NULL) {
+        u.u_error = ENODEV;
+        return -1;
+    }
+
+    /* Refuse if any inode still active on this device */
+    for (struct inode *ip2 = &inode[0]; ip2 < &inode[NINODE]; ip2++) {
+        if (ip2->i_dev == dev && ip2->i_count != 0) {
+            if (mp->m_inodp != ip2) {
+                u.u_error = EBUSY;
+                return -1;
+            }
+        }
+    }
+
+    mp->m_inodp->i_flag &= ~IMOUNT;
+    iput(mp->m_inodp);
+    brelse(mp->m_bufp);
+    mp->m_bufp = NULL;
+    mp->m_inodp = NULL;
+    if (bdevsw[major(dev)].d_close) {
+        (*bdevsw[major(dev)].d_close)(dev, 0);
+    }
+    return 0;
 }
 
 /*
@@ -827,8 +974,11 @@ loop:
             f++;
             if (p->p_stat == SZOMB) {
                 u.u_ar0[R0] = p->p_pid;
-                mfree(swapmap, 1, p->p_addr);
-                p->p_stat = NULL;
+                if (p->p_addr && p->p_size) {
+                    mfree(coremap, p->p_size, p->p_addr);
+                }
+                p->p_addr = 0;
+                p->p_stat = 0;
                 p->p_pid = 0;
                 p->p_ppid = 0;
                 p->p_sig = 0;
@@ -867,7 +1017,7 @@ int rexit(void) {
  * exit - Exit process
  */
 void exit(void) {
-    register int i, a;
+    register int i;
     register struct proc *p, *q;
 
     p = u.u_procp;
@@ -890,18 +1040,8 @@ void exit(void) {
         p->p_textp = NULL;
     }
     
-    a = malloc(swapmap, 1);
-    if (a == 0)
-        panic("out of swap");
-        
-    /* Save u area to swap for parent (zombie state) */
-    /* Implementation detail specific to port */
-    
-    mfree(coremap, p->p_size, p->p_addr);
-    p->p_addr = a;
+    /* No swap in this port: keep core allocation until parent waits. */
     p->p_stat = SZOMB;
-
-loop:
     for (q = &proc[0]; q < &proc[NPROC]; q++) {
         if (q->p_ppid == p->p_pid) {
             wakeup(&proc[1]); /* Wake init */
@@ -911,7 +1051,13 @@ loop:
         }
     }
     
-    wakeup(p->p_ppid); /* Wake parent */
+    /* Wake parent */
+    for (q = &proc[0]; q < &proc[NPROC]; q++) {
+        if (q->p_pid == p->p_ppid) {
+            wakeup(q);
+            break;
+        }
+    }
     swtch();
 }
 
@@ -919,31 +1065,30 @@ loop:
  * fork - Fork system call
  */
 int fork(void) {
-    register struct proc *p1, *p2;
+    register struct proc *p1;
+    int ret;
 
     p1 = u.u_procp;
-    for (p2 = &proc[0]; p2 < &proc[NPROC]; p2++) {
-        if (p2->p_stat == NULL)
-            goto found;
+    ret = newproc();
+    if (ret < 0) {
+        u.u_error = EAGAIN;
+        goto out;
     }
-    u.u_error = EAGAIN;
-    goto out;
-
-found:
-    if (newproc()) {
-        u.u_ar0[R0] = p1->p_pid;
+    if (ret) {
+        /* Child returns 0 from fork */
+        u.u_ar0[R0] = 0;
         u.u_cstime[0] = 0; 
         u.u_cstime[1] = 0;
         u.u_stime = 0;
-        u.u_cutime[0] = 0; 
         u.u_cutime[1] = 0;
         u.u_utime = 0;
         return 0;
     }
-    u.u_ar0[R0] = p2->p_pid;
+    /* Parent gets child's pid (newproc increments mpid). */
+    u.u_ar0[R0] = mpid;
 
 out:
-    u.u_ar0[R7] += 2; 
+    /* u.u_ar0[R7] += 2; - V6 compatibility removed for x86 syscalls */ 
     return 0;
 }
 
@@ -952,15 +1097,38 @@ out:
  */
 int exec(void) {
     struct inode *ip;
-    struct buf *bp;
+    struct buf *bp = NULL;
     char *cp;
     int na, nc;
     uint32_t ap;
+    uint32_t new_sp = 0;
     int c;
     int header[4];
     int ts, ds, sep;
+    int raw = 0;
+    uint32_t file_size;
+    char kpath[64];
+    int kpi = 0;
+    extern int schar(void);
     
-    ip = namei(uchar, 0);
+    /* debug log removed */
+    
+    u.u_dirp = (caddr_t)u.u_arg[0];
+    while (kpi < (int)sizeof(kpath) - 1) {
+        c = fubyte(u.u_dirp++);
+        if (c < 0) {
+            u.u_error = EFAULT;
+            return -1;
+        }
+        kpath[kpi++] = (char)c;
+        if (c == 0) {
+            break;
+        }
+    }
+    kpath[(kpi < (int)sizeof(kpath)) ? kpi : (int)sizeof(kpath) - 1] = 0;
+    
+    u.u_dirp = (caddr_t)kpath;
+    ip = namei(schar, 0);
     if (ip == NULL) {
         return -1;
     }
@@ -970,11 +1138,13 @@ int exec(void) {
     }
     execnt++;
     
-    if (access(ip, IEXEC) || (ip->i_mode & IFMT) != 0)
-        goto bad;
+    {
+        if (access(ip, IEXEC) || (ip->i_mode & IFMT) != 0) {
+            goto bad;
+        }
+    }
     
     bp = getblk(NODEV, 0);
-    
     cp = bp->b_addr;
     na = 0;
     nc = 0;
@@ -1027,8 +1197,17 @@ int exec(void) {
     } else if (header[0] == 0411) {
         sep++;
     } else if (header[0] != 0410) {
-        u.u_error = ENOEXEC;
-        goto bad;
+        /* Treat as flat binary: load entire file at address 0 */
+        file_size = ((ip->i_size0 & 0xFF) << 16) | ip->i_size1;
+        if (file_size == 0) {
+            u.u_error = ENOEXEC;
+            goto bad;
+        }
+        raw = 1;
+        header[0] = 0407;
+        header[1] = 0;
+        header[2] = file_size;
+        header[3] = 0;
     }
     
     if (header[1] != 0 && (ip->i_flag & ITEXT) == 0 && ip->i_count != 1) {
@@ -1048,16 +1227,21 @@ int exec(void) {
         u.u_procp->p_textp = NULL;
     }
     expand(USIZE);
-    xalloc(ip);
+    if (!raw && header[1] != 0) {
+        xalloc(ip);
+    }
     
     c = USIZE + ds + SSIZE;
     expand(c);
     
     estabur(0, ds, 0, 0);
     u.u_base = 0;
-    u.u_offset[1] = 020 + header[1];
+    u.u_offset[1] = raw ? 0 : (020 + header[1]);
     u.u_count = header[2];
     readi(ip);
+    if (u.u_error) {
+        goto bad;
+    }
     
     u.u_tsize = ts;
     u.u_dsize = ds;
@@ -1066,17 +1250,47 @@ int exec(void) {
     estabur(u.u_tsize, u.u_dsize, u.u_ssize, u.u_sep);
     
     cp = bp->b_addr;
-    ap = -nc - na*4 - 4;
-    u.u_ar0[R6] = ap;
-    suword(ap, na);
-    c = -nc;
-    while (na--) {
-        suword(ap+=4, c);
-        do
-            subyte(c++, *cp);
-        while(*cp++);
+    {
+        uint32_t stack_top = (ds + SSIZE) * 64;
+        uint32_t needed = nc + na * 4 + 8; /* argc + argv + NULL */
+        uint32_t argp;
+        uint32_t strp;
+
+        if (needed > stack_top) {
+            u.u_error = E2BIG;
+            goto bad;
+        }
+
+        ap = stack_top - needed;
+        new_sp = ap;
+        u.u_ar0[UESP] = ap;
+        u.u_ar0[EIP] = 0;
+
+        if (suword((caddr_t)ap, na) < 0) {
+            u.u_error = EFAULT;
+            goto bad;
+        }
+        argp = ap + 4;
+        strp = ap + 4 + na * 4 + 4;
+
+        while (na--) {
+            if (suword((caddr_t)argp, (int)strp) < 0) {
+                u.u_error = EFAULT;
+                goto bad;
+            }
+            argp += 4;
+            do {
+                if (subyte((caddr_t)strp++, *cp) < 0) {
+                    u.u_error = EFAULT;
+                    goto bad;
+                }
+            } while (*cp++);
+        }
+        if (suword((caddr_t)argp, 0) < 0) {
+            u.u_error = EFAULT;
+            goto bad;
+        }
     }
-    suword(ap+4, -1);
     
     if ((u.u_procp->p_flag & STRC) == 0) {
         if (ip->i_mode & ISUID)
@@ -1092,15 +1306,25 @@ int exec(void) {
         if ((u.u_signal[i] & 1) == 0)
             u.u_signal[i] = 0;
 
+    /* Refresh user segments now that exec may have moved p_addr. */
+    update_pos(u.u_procp);
+
     brelse(bp);
     iput(ip);
     if (execnt >= NEXEC)
         wakeup(&execnt);
     execnt--;
+    if (new_sp != 0) {
+        extern void return_to_user(uint32_t ip, uint32_t sp);
+        return_to_user(0, new_sp);
+    }
     return 0;
 
 bad:
-    brelse(bp);
+    printf("exec: failed u_error=%d path=%s\n", u.u_error, kpath);
+    if (bp) {
+        brelse(bp);
+    }
     iput(ip);
     if (execnt >= NEXEC)
         wakeup(&execnt);
@@ -1112,3 +1336,63 @@ bad:
 extern int newproc(void);
     
 
+
+/*
+ * Machine Dependent Memory Access Functions
+ * Replaces assembly routines to handle flat memory model relocation
+ */
+
+static uint32_t user_phys_addr(caddr_t addr) {
+    uint32_t offset = (uint32_t)addr;
+    struct proc *p = u.u_procp;
+    
+    /* Check limit */
+    if (offset >= (p->p_size - USIZE) * 64) {
+        return 0; /* Invalid */
+    }
+    
+    /* Calculate physical address */
+    /* Base is p_addr + USIZE */
+    return (p->p_addr + USIZE) * 64 + offset;
+}
+
+int fubyte(caddr_t addr) {
+    uint32_t paddr = user_phys_addr(addr);
+    if (paddr == 0) return -1;
+    return *(volatile uint8_t *)paddr;
+}
+
+int fuword(caddr_t addr) {
+    uint32_t paddr = user_phys_addr(addr);
+    if (paddr == 0) return -1;
+    /* Check alignment? V6 didn't strictly enforce, but x86 is fine unaligned */
+    return *(volatile uint32_t *)paddr; /* V6 'word' is 16-bit? include/types.h says int is 32-bit? */
+    /* V6 int was 16-bit. Here we use 32-bit for 'word' usually? 
+       Check types.h
+       fuword usually fetches an 'int' or generic word.
+       If userspace expects 16-bit, we might have issues.
+       icode uses 32-bit registers (eax). So 32-bit is correct.
+    */
+}
+
+int fuiword(caddr_t addr) {
+    return fuword(addr);
+}
+
+int subyte(caddr_t addr, int val) {
+    uint32_t paddr = user_phys_addr(addr);
+    if (paddr == 0) return -1;
+    *(volatile uint8_t *)paddr = (uint8_t)val;
+    return 0;
+}
+
+int suword(caddr_t addr, int val) {
+    uint32_t paddr = user_phys_addr(addr);
+    if (paddr == 0) return -1;
+    *(volatile uint32_t *)paddr = val;
+    return 0;
+}
+
+int suiword(caddr_t addr, int val) {
+    return suword(addr, val);
+}

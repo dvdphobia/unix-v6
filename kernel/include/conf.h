@@ -13,6 +13,7 @@
  * Block device switch table entry
  * One entry per block device type (disk, etc.)
  */
+struct buf;
 struct bdevsw {
     int     (*d_open)(dev_t dev, int flag);     /* Open device */
     int     (*d_close)(dev_t dev, int flag);    /* Close device */

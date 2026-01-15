@@ -18,6 +18,8 @@ extern struct proc proc[];
 extern struct user u;
 extern int8_t runrun;
 extern void printf(const char *fmt, ...);
+extern int issig(void);
+extern void psig(void);
 
 /*
  * System call table entry
@@ -54,14 +56,37 @@ extern int nullsys(void);
  *   EIP, CS, EFLAGS (pushed by CPU)
  *   ESP, SS (if from user mode)
  */
+void trap1(int (*func)(void));
+
+/*
+ * trap - Handle processor traps and exceptions
+ * Called from x86.S interrupt handler
+ *
+ * The trap frame contains:
+ *   GS, FS, ES, DS (segment registers)
+ *   EDI, ESI, EBP, ESP, EBX, EDX, ECX, EAX (pushed by pusha)
+ *   trap number, error code
+ *   EIP, CS, EFLAGS (pushed by CPU)
+ *   ESP, SS (if from user mode)
+ */
 void trap(uint32_t *frame) {
     uint32_t trapno;
     uint32_t err;
     uint32_t eip;
+    
+    /* Debug print for ALL traps */
+    trapno = frame[TRAPNO];
+    /* if (trapno == 0x80) {
+        printf("SYSCALL: %d\n", frame[EAX]);
+    } else if (trapno >= 32 && trapno < 48) {
+         Hardware IRQs - ignore to avoid console spam 
+    } else {
+        printf("TRAP: %d EIP=%x CS=%x\n", trapno, frame[EIP], frame[CS]);
+    } */
     uint32_t cs;
     uint32_t eflags;
     int from_user;
-    int sig;
+    int sig = 0;
     struct sysent *callp;
     int i;
     
@@ -241,7 +266,13 @@ void trap(uint32_t *frame) {
      * Keyboard interrupt (IRQ 1 = INT 33)
      */
     case 33:
-        /* TODO: Handle keyboard input */
+        {
+            extern void kbd_intr(void);
+            kbd_intr();
+            
+            extern void pic_eoi(int irq);
+            pic_eoi(1);
+        }
         break;
     
     /*
@@ -263,14 +294,17 @@ void trap(uint32_t *frame) {
         /* x86 style: arguments in registers/stack */
         
         /* For now, get args from ECX, EDX, EBX, ESI, EDI */
-        u.u_arg[0] = frame[ECX];
-        u.u_arg[1] = frame[EDX];
-        u.u_arg[2] = frame[EBX];
+        /* For now, get args from EBX, ECX, EDX, ESI, EDI (Linux Standard) */
+        u.u_arg[0] = frame[EBX];
+        u.u_arg[1] = frame[ECX];
+        u.u_arg[2] = frame[EDX];
         u.u_arg[3] = frame[ESI];
         u.u_arg[4] = frame[EDI];
         
         /* Call the system call handler */
+        /* printf("trap: calling syscall handler, arg0=%x arg1=%x\n", u.u_arg[0], u.u_arg[1]); */
         trap1(callp->call);
+        /* printf("trap: syscall returned\n"); */
         
         /* Handle errors */
         if (u.u_intflg) {
@@ -323,7 +357,7 @@ void trap(uint32_t *frame) {
         swtch();
     }
     
-    return;
+    goto userret;
 
 kernel_fault:
     printf("\nKernel fault!\n");
@@ -335,6 +369,14 @@ kernel_fault:
 
 signal:
     psignal(u.u_procp, sig);
+    /* Fall through to process the signal before returning to user mode */
+    
+userret:
+    /* Process pending signal before returning to user mode */
+    if (from_user && issig()) {
+        psig();
+    }
+    /* printf("trap: returning to user EIP=%x\n", frame[EIP]); */
     return;
 }
 
@@ -346,10 +388,13 @@ void trap1(int (*func)(void)) {
     /* Save registers for signals */
     extern int savu(uint32_t *);
     
+    /* printf("trap1: entering, func=%x\n", (uint32_t)func); */
     savu(u.u_qsav);
+    /* printf("trap1: savu done, calling handler\n"); */
     
     /* Call the handler */
     (*func)();
+    /* printf("trap1: handler returned\n"); */
 }
 
 /*

@@ -36,18 +36,19 @@
  */
 
 /* Register offsets from saved register base (in 32-bit words) */
-#define EAX     0
-#define ECX     1
-#define EDX     2
-#define EBX     3
-#define ESP_SAVE 4
-#define EBP     5
-#define ESI     6
-#define EDI     7
-#define DS      8
-#define ES      9
-#define FS      10
-#define GS      11
+/* Frame starts at GS (top of stack in isr_common). */
+#define GS      0
+#define FS      1
+#define ES      2
+#define DS      3
+#define EDI     4
+#define ESI     5
+#define EBP     6
+#define ESP_SAVE 7
+#define EBX     8
+#define EDX     9
+#define ECX     10
+#define EAX     11
 #define TRAPNO  12
 #define ERR     13
 #define EIP     14

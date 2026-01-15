@@ -10,6 +10,8 @@
 #include "types.h"
 #include "inode.h"
 
+struct proc;
+
 /*
  * Random set of variables used by more than one routine
  */
@@ -106,6 +108,7 @@ void swtch(void);
 void sched(void);
 void expand(int newsize);
 int newproc(void);
+void update_pos(struct proc *p);
 int issig(void);
 void psignal(struct proc *p, int sig);
 void aretu(uint32_t *addr);

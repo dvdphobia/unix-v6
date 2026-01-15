@@ -23,6 +23,8 @@ extern void sleep(void *chan, int pri);
 extern void iinit(void);
 extern struct inode *ialloc(dev_t dev);
 extern struct file *falloc(void);
+extern void readi(struct inode *ip);
+extern void writei(struct inode *ip);
 
 /*
  * readp - Read from a pipe

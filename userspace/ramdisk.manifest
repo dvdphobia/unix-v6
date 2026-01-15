@@ -1,0 +1,12 @@
+# mode path source
+0000755 /etc/init build/userspace/init.bin
+0000755 /bin/sh build/userspace/sh.bin
+0000755 /bin/ls build/userspace/ls.bin
+0000755 /bin/cat build/userspace/cat.bin
+0000755 /bin/echo build/userspace/echo.bin
+0000755 /bin/pwd build/userspace/pwd.bin
+0000755 /bin/hello build/userspace/hello.bin
+0000755 /bin/netdemo build/userspace/netdemo.bin
+0000644 /etc/motd etc/motd
+0000644 /etc/passwd etc/passwd
+0000644 /etc/group etc/group

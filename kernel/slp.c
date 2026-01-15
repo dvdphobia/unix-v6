@@ -11,6 +11,7 @@
 #include "include/user.h"
 #include "include/proc.h"
 #include "include/systm.h"
+#include "include/reg.h"
 #include "include/text.h"
 #include "include/buf.h"
 #include "include/file.h"
@@ -31,9 +32,53 @@ extern int spl6(void);
 extern void splx(int);
 
 /* Context switch functions from x86.S */
+/* Context switch functions from x86.S */
 extern int savu(uint32_t *);
 extern void retu(uint32_t *);
 extern void aretu(uint32_t *);
+
+/* GDT from x86.S */
+extern uint64_t gdt[];
+
+/* Update GDT user segments for process base address */
+void update_pos(struct proc *p) {
+    /* Offset by USIZE (u-area) so virtual 0 starts after it */
+    uint32_t base = (p->p_addr + USIZE) * 64;
+    uint32_t limit = 0xFFFFF; /* 4GB limit in 4KB units */
+    
+    /* GDT Entry Format:
+     * High: B[31:24] G D 0 Avl Lim[19:16] P DPL S Type B[23:16]
+     * Low:  B[15:0] Lim[15:0]
+     */
+     
+    /* Construct descriptors */
+    /* Code: Type=0xA (Exe/Read), S=1, DPL=3, P=1, D=1, G=1 */
+    uint32_t low = (limit & 0xFFFF) | (base << 16);
+    uint32_t high = (base & 0xFF000000) |       /* Base[31:24] */
+                    (0xC << 20) |               /* G=1, D=1 */
+                    (limit & 0xF0000) |
+                    (0xFA00) |                  /* P=1, DPL=3, S=1, Type=A */
+                    ((base >> 16) & 0xFF);      /* Base[23:16] */
+            
+
+
+    /* Update GDT[3] (User Code) */
+    gdt[3] = ((uint64_t)high << 32) | low;
+    
+    /* Data: Type=0x2 (Read/Write), S=1, DPL=3, P=1, B=1, G=1 */
+    high = (base & 0xFF000000) | 
+           (0xC << 20) |
+           (limit & 0xF0000) |
+           (0xF200) |                   /* P=1, DPL=3, S=1, Type=2 */
+           ((base >> 16) & 0xFF);
+           
+    /* Update GDT[4] (User Data) */
+    gdt[4] = ((uint64_t)high << 32) | low;
+
+    /* Kernel stack is the global u.u_stack, not the swapped image */
+    tss.esp0 = (uint32_t)u.u_stack + sizeof(u.u_stack);
+    tss.ss0 = KERNEL_DS;
+}
 
 /*
  * sleep - Give up the processor till a wakeup occurs on chan
@@ -201,7 +246,7 @@ loop:
         goto loop;
     }
     
-    /*
+/*
      * Switch to selected process
      */
     if (p != curproc) {
@@ -210,27 +255,59 @@ loop:
         curpri = p->p_pri;
         
         /* Save current context and restore new */
-        if (lastproc != NULL) {
-            if (savu(u.u_rsav)) {
-                /* We've been switched back to */
-                return;
+        if (lastproc != NULL && lastproc->p_addr && p->p_addr) {
+            void *old_dest = (void*)(lastproc->p_addr * 64);
+            void *new_src = (void *)(p->p_addr * 64);
+            
+            if (new_src != &u) {
+                /* Update GDT for new process before switching */
+                update_pos(p);
+                
+                /* 
+                 * savu_switch atomically:
+                 * 1. Saves current context to u.u_rsav
+                 * 2. Copies &u to old_dest (saves old process's u-area)
+                 * 3. Copies new_src to &u (loads new process's u-area)
+                 * 4. Restores context from new u.u_rsav
+                 * 
+                 * Returns 1 when resumed after being switched out.
+                 * Never returns 0 from the call itself (it longjmps to new context).
+                 */
+
+
+                int sret = savu_switch(u.u_rsav, old_dest, new_src, 
+                                       sizeof(struct user) / 4);
+                if (sret) {
+                    return;
+                }
+                /* Should not reach here - savu_switch always jumps to new context */
+                panic("savu_switch returned 0");
             }
-            /* Save u-area to process storage */
-            /* Simplified: u is global, p_addr points to storage */
-            if (lastproc->p_addr) {
-                bcopy(&u, (void*)lastproc->p_addr, sizeof(struct user));
+        } else if (p->p_addr) {
+            /* First process or no lastproc - just load new */
+            void *src = (void *)(p->p_addr * 64);
+            if (src != &u) {
+                struct user *src_u = (struct user *)src;
+                uint32_t *new_rsav = src_u->u_rsav;
+                
+                update_pos(p);
+                
+                extern void switch_context(void *dest, void *src, uint32_t count, 
+                                          uint32_t *new_rsav);
+                switch_context(&u, src, sizeof(struct user)/4, new_rsav);
+                /* Never reached */
+                panic("switch_context returned");
             }
         }
         
-        /* Load new process context */
-        /* Copy u-area from process storage */
-        if (p->p_addr) {
-            bcopy((void*)p->p_addr, &u, sizeof(struct user));
-        }
-        
-        /* In real implementation, would switch page tables, etc. */
+        /* If src == &u (shouldn't happen with switching), just call retu */
+        update_pos(p);
         retu(u.u_rsav);
     }
+    
+    // if (curproc && curproc->p_pid == 2) {
+    //     printf("swtch: resumed shell (pid 2)\n");
+    // }
     
     spl0();
     runrun = 0;
@@ -290,9 +367,6 @@ loop:
      */
     spl0();
     rp = p1;
-    a = rp->p_size;
-    
-    /* Simplified: just mark as loaded */
     rp->p_flag |= SLOAD;
     rp->p_time = 0;
     
@@ -307,11 +381,55 @@ loop:
  */
 void expand(int newsize) {
     struct proc *p;
+    int a1, a2;
+    int i, n;
     
     p = u.u_procp;
+    
+    /* If shrinking, this is easy, but we only support growing or same */
+    if (newsize <= p->p_size) {
+        /* Should release memory, but simplified */
+        p->p_size = newsize;
+        return;
+    }
+    
+    /* Allocate new area */
+    a1 = malloc(coremap, newsize);
+    if (a1 == 0) {
+        /* No space */
+        printf("expand: out of memory (req %d)\n", newsize);
+        /* Simple wait? No, V6 swaps. Here we panic or error. */
+        u.u_error = ENOMEM;
+        return;
+    }
+    
+    /* Copy current content */
+    a2 = p->p_addr;
+    n = p->p_size;
+    /* Copy in 64-byte chunks */
+    for (i = 0; i < n; i++) {
+        copyseg(a2++, a1++);
+    }
+    /* Clear remainder */
+    for (; i < newsize; i++) {
+        clearseg(a1++);
+    }
+    
+    /* Free old memory */
+    mfree(coremap, p->p_size, p->p_addr);
+    
+    /* Update process */
+    p->p_addr = a1 - newsize; /* a1 was incremented */
     p->p_size = newsize;
     
-    /* TODO: Implement actual memory management */
+    /* Since we moved the u-area (it's part of the image), 
+     * and 'u' is the active copy, we don't need to reload 'u'.
+     * But we updated the backing store location.
+     * When we switch out, 'u' will be saved to the NEW p_addr.
+     */
+    
+    /* Update segments since base changed */
+    update_pos(p);
 }
 
 /*
@@ -324,6 +442,9 @@ int newproc(void) {
     struct proc *p1, *p2;
     int i;
     int pid;
+    int a1;
+    int n, a2;
+    struct user *child_u;
     
     /* Find empty slot in process table */
     p2 = NULL;
@@ -335,7 +456,6 @@ int newproc(void) {
     }
     
     if (p2 == NULL) {
-        /* Process table full */
         u.u_error = EAGAIN;
         return -1;
     }
@@ -343,7 +463,7 @@ int newproc(void) {
     /* Generate unique process ID */
     pid = ++mpid;
     
-    /* Copy parent process to child */
+    /* Copy parent process info to child */
     p1 = u.u_procp;
     
     p2->p_stat = SRUN;
@@ -356,12 +476,61 @@ int newproc(void) {
     p2->p_cpu = 0;
     p2->p_nice = p1->p_nice;
     p2->p_ttyp = p1->p_ttyp;
-    p2->p_size = p1->p_size;
     p2->p_textp = p1->p_textp;
     
-    /* TODO: Allocate memory for child and copy */
+    /* Allocate memory for child - MUST do this before savu */
+    a1 = malloc(coremap, p1->p_size);
+    if (a1 == 0) {
+        u.u_error = ENOMEM;
+        p2->p_stat = SNULL;
+        return -1;
+    }
+    p2->p_addr = a1;
+    p2->p_size = p1->p_size;
+
+    /* Calculate these NOW, before savu, to avoid stack changes */
+    n = p1->p_size;
+    a2 = p1->p_addr;
+    child_u = (struct user *)(p2->p_addr * 64);
     
-    return 0;  /* Return 0 in parent */
+    /*
+     * CRITICAL: Use savu_and_copy to atomically:
+     * 1. Save context to u.u_rsav
+     * 2. Copy entire u-area to child's storage
+     * 
+     * This avoids the C compiler inserting stack-modifying code between
+     * savu and bcopy which would corrupt the saved context.
+     */
+    extern int savu_and_copy(uint32_t *rsav, void *src, void *dest, uint32_t count);
+    
+    if (savu_and_copy(u.u_rsav, &u, child_u, sizeof(struct user) / 4)) {
+        /* Child resumes here with return value 1 */
+        return 1;
+    }
+    
+    /* Parent continues here - u-area already copied atomically */
+    /* Fix child's back-pointer to its proc; u.u_procp was copied from parent. */
+    child_u->u_procp = p2;
+    
+    /* Copy parent's data/stack segments beyond u-area */
+    for (i = USIZE; i < n; i++) {
+        copyseg(a2 + i, p2->p_addr + i);
+    }
+
+    /*
+     * Increase reference counts on shared objects (files and current directory).
+     * The child shares these with the parent.
+     */
+    for (i = 0; i < NOFILE; i++) {
+        if (u.u_ofile[i] != NULL) {
+            u.u_ofile[i]->f_count++;
+        }
+    }
+    if (u.u_cdir) {
+        u.u_cdir->i_count++;
+    }
+    
+    return 0;
 }
 
 /* issig and psignal are implemented in sig.c */

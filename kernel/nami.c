@@ -70,6 +70,7 @@ struct inode *namei(int (*func)(void), int flag) {
     off_t eo;
     int i;
     
+    
     /*
      * If name starts with '/' start from root;
      * otherwise start from current directory.
@@ -95,10 +96,12 @@ struct inode *namei(int (*func)(void), int flag) {
     while (c == '/') {
         c = (*func)();
     }
+    /* printf("namei: after slash skip, c=0x%x ('%c')\n", c & 0xFF, (c >= 32 && c < 127) ? c : '?'); */
     
     /* Empty pathname or just '/' */
     if (c == '\0' && flag != 0) {
         u.u_error = ENOENT;
+        /* printf("namei: empty path, going to out\n"); */
         goto out;
     }
 
@@ -106,11 +109,13 @@ cloop:
     /*
      * Here dp contains pointer to last component matched.
      */
+    /* printf("namei: cloop c=0x%x\n", c & 0xFF); */
     if (u.u_error) {
         goto out;
     }
     
     if (c == '\0') {
+        /* printf("namei: returning dp=%x\n", (uint32_t)dp); */
         return dp;
     }
     
@@ -167,6 +172,7 @@ eloop:
      * If at the end of the directory, the search failed.
      * Report what is appropriate as per flag.
      */
+    /* printf("namei: eloop u.u_count=%d u.u_offset[1]=%d\n", u.u_count, u.u_offset[1]); */
     if (u.u_count == 0) {
         if (bp != NULL) {
             brelse(bp);
@@ -199,7 +205,9 @@ eloop:
         if (bp != NULL) {
             brelse(bp);
         }
+        /* printf("namei: reading dir block for offset=%d\n", u.u_offset[1]); */
         bp = bread(dp->i_dev, bmap(dp, u.u_offset[1] / BSIZE, 0));
+        /* printf("namei: bread returned bp=%x\n", (uint32_t)bp); */
         if (bp == NULL || (bp->b_flags & B_ERROR)) {
             if (bp) brelse(bp);
             goto out;

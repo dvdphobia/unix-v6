@@ -15,24 +15,33 @@
 /* Defined in main.c */
 extern void vga_putchar(char c);
 extern void serial_putchar(char c);
+extern int subyte(caddr_t addr, int val);
+extern uint8_t inb(uint16_t port);
 
 /* Use a simple circular buffer for input */
 #define KBD_BUF_SIZE 128
 static char kbd_buffer[KBD_BUF_SIZE];
 static int kbd_read_ptr = 0;
 static int kbd_write_ptr = 0;
+static int kbd_wait;
 
 static void kbd_putc(char c) {
     int next = (kbd_write_ptr + 1) % KBD_BUF_SIZE;
     if (next != kbd_read_ptr) {
         kbd_buffer[kbd_write_ptr] = c;
         kbd_write_ptr = next;
+        wakeup(&kbd_wait);
     }
 }
 
 int kbd_getc(void) {
     if (kbd_read_ptr == kbd_write_ptr) {
-        return -1; /* Buffer empty */
+        /* Poll serial for input if interrupts aren't feeding the buffer yet. */
+        if (inb(0x3F8 + 5) & 0x01) {
+            kbd_putc((char)inb(0x3F8));
+        } else {
+            return -1; /* Buffer empty */
+        }
     }
     char c = kbd_buffer[kbd_read_ptr];
     kbd_read_ptr = (kbd_read_ptr + 1) % KBD_BUF_SIZE;
@@ -61,8 +70,38 @@ int conclose(dev_t dev, int flag) {
  * conread - Read from console
  */
 int conread(dev_t dev) {
-    /* TODO: Implement keyboard input */
     (void)dev;
+    
+    while (u.u_count > 0) {
+        int c;
+        while ((c = kbd_getc()) < 0) {
+            /* Poll serial for input to avoid IRQ dependency */
+            if (inb(0x3F8 + 5) & 0x01) {
+                c = inb(0x3F8);
+                break;
+            }
+            sleep(&kbd_wait, PRIBIO);
+        }
+        
+        if (c == '\r') {
+            c = '\n';
+        }
+
+        /* Echo typed characters for simple user shell interaction */
+        vga_putchar(c);
+        serial_putchar(c);
+        
+        if (subyte(u.u_base, c) < 0) {
+            u.u_error = EFAULT;
+            return -1;
+        }
+        u.u_base++;
+        u.u_count--;
+        
+        if (c == '\n') {
+            break;
+        }
+    }
     return 0;
 }
 

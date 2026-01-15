@@ -35,6 +35,9 @@ SECTIONS
         *(COMMON)
         *(.bss)
     }
+    
+    /* Define symbol for end of kernel image */
+    _end = .;
 
     /* Discard unused sections */
     /DISCARD/ :

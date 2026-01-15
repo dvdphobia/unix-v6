@@ -13,6 +13,7 @@
 #include "include/filsys.h"
 #include "include/inode.h"
 #include "include/conf.h"
+#include "include/reg.h"
 
 /* External declarations */
 extern struct user u;
@@ -25,6 +26,7 @@ extern void iput(struct inode *ip);
 extern void wakeup(void *chan);
 extern struct filsys *getfs(dev_t dev);
 extern struct inode *namei(int (*func)(void), int flag);
+extern void closei(struct inode *ip, int rw);
 extern int uchar(void);
 extern int suser(void);
 
@@ -80,7 +82,7 @@ found_fd:
 
 found_fp:
     u.u_ofile[i] = fp;
-    u.u_ar0[0] = i;  /* Return fd in EAX (index 0) */
+    u.u_ar0[EAX] = i;
     fp->f_count = 1;
     fp->f_offset[0] = 0;
     fp->f_offset[1] = 0;
@@ -275,7 +277,7 @@ int ufalloc(void) {
     
     for (i = 0; i < NOFILE; i++) {
         if (u.u_ofile[i] == NULL) {
-            u.u_ar0[0] = i;
+            u.u_ar0[EAX] = i;
             return i;
         }
     }

@@ -18,7 +18,7 @@
 #define NFILE       100         /* Number of in-core file structures */
 #define NMOUNT      5           /* Number of mountable file systems */
 #define NEXEC       3           /* Number of simultaneous exec's */
-#define MAXMEM      (64*32)     /* Max core per process (in 64-byte units, ~128KB) */
+#define MAXMEM      (1024*1024) /* Max core (in 64-byte units) = 64MB */
 #define SSIZE       20          /* Initial stack size (*64 bytes) */
 #define SINCR       20          /* Increment of stack (*64 bytes) */
 #define NOFILE      15          /* Max open files per process */
@@ -66,7 +66,7 @@
  * Fundamental constants
  * USIZE adjusted for x86 (was 16 * 64 = 1024 bytes on PDP-11)
  */
-#define USIZE       16          /* Size of user block (*64 bytes) */
+#define USIZE       64          /* Size of user block (*64 bytes) = 4KB */
 #define USIZE_BYTES (USIZE * 64)
 #define ROOTINO     1           /* I-number of all roots */
 #define DIRSIZ      14          /* Max characters per directory name */

@@ -22,7 +22,7 @@
  */
 struct user {
     /* Saved registers for context switch - must be first */
-    uint32_t    u_rsav[2];      /* Save ESP, EBP when exchanging stacks */
+    uint32_t    u_rsav[6];      /* Save ESP, EBP, EBX, ESI, EDI, padding */
     uint32_t    u_fsav[8];      /* Save FPU registers (x87 state) */
 
     /* Process identification */
@@ -69,8 +69,8 @@ struct user {
     int32_t     u_sep;          /* Flag for I and D separation */
 
     /* Signal and interrupt handling */
-    uint32_t    u_qsav[2];      /* Label variable for quits and interrupts */
-    uint32_t    u_ssav[2];      /* Label variable for swapping */
+    uint32_t    u_qsav[6];      /* Label variable for quits and interrupts */
+    uint32_t    u_ssav[6];      /* Label variable for swapping */
     uint32_t    u_signal[NSIG]; /* Disposition of signals */
 
     /* Timing */
@@ -84,8 +84,12 @@ struct user {
     int8_t      u_intflg;       /* Catch interrupt from sys */
 
     /* Kernel stack grows down from end of user structure */
-    /* Stack space: remaining bytes up to USIZE*64 */
+    /* Stack space sized so sizeof(struct user) == USIZE_BYTES */
+    uint8_t     u_stack[3571];
 };
+
+/* Ensure the u-area occupies exactly USIZE_BYTES */
+typedef char u_size_check[(sizeof(struct user) == USIZE_BYTES) ? 1 : -1];
 
 /* Global user structure - mapped at fixed location per process */
 extern struct user u;

@@ -35,6 +35,7 @@ typedef int32_t             blkno_t;    /* Block number */
 typedef int32_t             daddr_t;    /* Disk address */
 typedef int16_t             pid_t;      /* Process ID */
 
+
 /* Pointer type that matches PDP-11's 16-bit pointers mapped to 32-bit */
 typedef void*               caddr_t;    /* Core address */
 

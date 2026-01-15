@@ -1,0 +1,15 @@
+# /etc/rc - System Startup Script
+# Unix V6 x86 Port
+#
+# This script runs at boot time to initialize the system.
+# Based on BSD/macOS startup conventions.
+
+echo "Starting Unix V6 x86..."
+
+# Mount filesystems
+# mount -a
+
+# Start system daemons
+# (none yet)
+
+echo "System initialization complete."

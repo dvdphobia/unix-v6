@@ -24,8 +24,8 @@
  */
 static uint8_t icode[] = {
     0xb8, 0x0b, 0x00, 0x00, 0x00,  /* mov eax, 11 (exec) */
-    0xb9, 0x14, 0x00, 0x00, 0x00,  /* mov ecx, 20 (addr of path) */
-    0xba, 0x20, 0x00, 0x00, 0x00,  /* mov edx, 32 (addr of argv) */
+    0xbb, 0x14, 0x00, 0x00, 0x00,  /* mov ebx, 20 (addr of path) */
+    0xb9, 0x20, 0x00, 0x00, 0x00,  /* mov ecx, 32 (addr of argv) */
     0xcd, 0x80,                    /* int 0x80 */
     0xeb, 0xfe,                    /* jmp $ */
     0x00,                          /* padding */
@@ -44,7 +44,7 @@ struct proc proc[NPROC];
 struct proc *curproc;
 
 /* User structure - one per process, swapped with process */
-struct user u;
+struct user u __attribute__((aligned(64)));
 
 /* Inode table */
 struct inode inode[NINODE];
@@ -61,6 +61,7 @@ struct buf swbuf;
 
 /* Text table */
 /* struct text text[NTEXT]; Defined in text.c */
+
 
 /* Mount table */
 struct mount mount[NMOUNT];
@@ -115,6 +116,7 @@ static int vga_col = 0;
 /* External I/O functions from x86.S */
 extern void outb(uint16_t port, uint8_t val);
 extern uint8_t inb(uint16_t port);
+extern char _end[]; /* Defined in linker script */
 
 /*
  * Initialize Programmable Interrupt Controller (PIC)
@@ -209,7 +211,7 @@ void vga_putchar(char c) {
     }
 }
 
-static void vga_clear(void) {
+void vga_clear(void) {
     for (int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
         VGA_BUFFER[i] = VGA_WHITE | ' ';
     }
@@ -290,6 +292,20 @@ void printf(const char *fmt, ...) {
     while (*fmt) {
         if (*fmt == '%') {
             fmt++;
+            /* Skip width and alignment specifiers */
+            int left_align = 0;
+            int width = 0;
+            if (*fmt == '-') {
+                left_align = 1;
+                fmt++;
+            }
+            while (*fmt >= '0' && *fmt <= '9') {
+                width = width * 10 + (*fmt - '0');
+                fmt++;
+            }
+            (void)left_align; /* Not implemented yet */
+            (void)width;      /* Not implemented yet */
+            
             switch (*fmt) {
             case 'd':
                 print_int(__builtin_va_arg(ap, int));
@@ -424,112 +440,119 @@ static uint8_t p1_stack[4096];
 
 extern int kbd_getc(void);
 
-#define CMD_BUF_SIZE 128
+extern void readi(struct inode *ip);
+extern struct inode *namei(int (*func)(), int flag);
+extern void iput(struct inode *ip);
+extern void prele(struct inode *ip);
+extern void plock(struct inode *ip);
 
-/*
- * strcmp - String comparison helper
- */
-int strcmp(const char *s1, const char *s2) {
-    while (*s1 && (*s1 == *s2)) {
-        s1++;
-        s2++;
-    }
-    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+
+
+/* Global TSS */
+struct tss_entry tss;
+extern uint64_t gdt[];
+
+/* Setup TSS and GDT entry */
+static void setup_tss(void) {
+    uint32_t base = (uint32_t)&tss;
+    uint32_t limit = sizeof(tss);
+    
+    /* TSS Descriptor in GDT[5] */
+    /* Low: Base[15:0] | Limit[15:0] */
+    uint32_t low = (base << 16) | (limit & 0xFFFF);
+    /* High: Base[31:24] | G=0,Avl=0,Lim[19:16]=0 | P=1,DPL=0,Type=9(TSS32) | Base[23:16] */
+    uint32_t high = (base & 0xFF000000) |
+                    0x00008900 |
+                    ((base >> 16) & 0xFF);
+                    
+    gdt[5] = ((uint64_t)high << 32) | low;
+    
+    /* Initialize TSS */
+    tss.ss0 = 0x10; /* Kernel Data Segment */
+    tss.esp0 = (uint32_t)u.u_stack + sizeof(u.u_stack);
+    
+    /* Load Task Register */
+    __asm__ __volatile__("ltr %w0" : : "q"(0x28));
 }
 
-/*
- * handle_command - Process a command line
- */
-void handle_command(char *cmd) {
-    if (cmd[0] == 0) return; /* Empty line */
-    
-    if (strcmp(cmd, "help") == 0) {
-        printf("Available commands:\n");
-        printf("  help   - Show this help\n");
-        printf("  clear  - Clear screen\n");
-        printf("  ls     - List files (stub)\n");
-        printf("  ps     - List processes\n");
-        printf("  panic  - Test kernel panic\n");
-    } 
-    else if (strcmp(cmd, "clear") == 0) {
-        vga_clear();
-        printf("Unix V6 x86 Port\n");
-        return;
-    }
-    else if (strcmp(cmd, "panic") == 0) {
-        panic("User requested panic");
-    }
-    else if (strcmp(cmd, "ls") == 0) {
-       printf("bin  etc  dev  usr  tmp  (simulated)\n");
-    }
-    else if (strcmp(cmd, "ps") == 0) {
-        printf("PID  PPID STAT ADDR\n");
-        for(int i=0; i<NPROC; i++) {
-            if (proc[i].p_stat != SNULL) {
-                printf("%d    %d    %d    %x", proc[i].p_pid, proc[i].p_ppid, proc[i].p_stat, proc[i].p_addr);
-                if (i == 0) printf(" (swapper)\n");
-                else if (i == 1) printf(" (init)\n");
-                else printf("\n");
-            }
-        }
-    }
-    else {
-        printf("Unknown command: %s\n", cmd);
-    }
-}
+static void proc0_main(void) __attribute__((noreturn));
+extern void switch_stack_and_call(uint32_t new_esp, void (*fn)(void))
+    __attribute__((noreturn));
 
-/*
- * start_init - Entry point for Process 1
- */
-void start_init(void) {
-    char buf[CMD_BUF_SIZE];
-    int pos = 0;
+static void proc0_main(void) {
+    /*
+     * Phase 5: Create init process and enter scheduler
+     */
+    printf("\nBootstraping /etc/init...\n");
+    
+    /* 
+     * Manually setup process 1
+     */
+    /* 
+     * Create init process using newproc
+     */
+    int np = newproc();
+    if (np) {
+        /* Child (P1) resumes here */
+        /* Ensure user segments and kernel stack for P1 are active */
+        update_pos(u.u_procp);
+        /* Expand memory to hold icode */
+        /* Size = USIZE + icode size (rounded to clicks) */
+        int icode_clicks = (sizeof(icode) + 63) / 64;
+        expand(USIZE + icode_clicks);
+        
+        /* Copy icode to user virtual 0 (physical p_addr + USIZE) */
+        /* We access physical memory directly since we are in kernel */
+        uint32_t user_base = (u.u_procp->p_addr + USIZE) * 64;
+        bcopy(icode, (void*)user_base, sizeof(icode));
+        
+        /* 
+         * Return to user mode to execute icode.
+         * We need to push a trap frame (SS, ESP, EFLAGS, CS, EIP) 
+         * and execute IRET, or rely on retu returning to a trampoline.
+         * Since we are in the middle of initialization, the stack we are on
+         * is the kernel stack for P1.
+         * 
+         * Logic: 
+         * kmain called newproc. 
+         * newproc (in child) returned 1.
+         * We are in kmain (child).
+         * We want to 'return' to user mode address 0.
+         * 
+         * We can construct a frame on the stack and call a helper.
+         */
+         
+         /* Helper to jump to user mode */
+         /* Arguments: entry point, stack pointer (top of memory) */
+         /* Stack is at top of allocated memory. 64-byte clicks. */
+         /* Size is (USIZE + icode_clicks) * 64 */
+         /* User stack pointer = icode_clicks * 64? NO. 
+            V6 exec puts stack at the top of the segment.
+            Our segment size is (USIZE + icode_clicks).
+            User limit is icode_clicks * 64.
+            So SP = icode_clicks * 64.
+         */
+         extern void return_to_user(uint32_t ip, uint32_t sp);
+         return_to_user(0, icode_clicks * 64);
+         /* Should not return */
+         panic("return_to_user failed");
+    }
 
-    /* We are now running as Process 1! */
-    printf("\n[P1] Process 1 started!\n");
-    printf("[P1] Simulating exec of /etc/init...\n");
+    printf("\n");
+    printf("======================================\n");
+    printf("Unix V6 x86 kernel initialization complete\n");
+    printf("======================================\n\n");
+
+    printf("Entering scheduler...\n");
     
-    printf("\nWelcome to Unix V6 x86 Port!\n");
-    printf("Type 'help' for commands.\n");
-    printf("# ");
-    
+    /* Enter scheduler loop (as Process 0) */
+    /* Call swtch() directly - let P1 run */
     for (;;) {
-       int c = kbd_getc();
-       if (c != -1) {
-           /* Handle enter/newline */
-           if (c == '\n' || c == '\r') {
-               buf[pos] = 0; /* Null terminate */
-               printf("\n");
-               handle_command(buf);
-               if (pos > 0 || buf[0] == 0) printf("# "); /* Prompt */
-               pos = 0;
-           }
-           /* Handle backspace */
-           else if (c == '\b' || c == 0x7F) {
-               if (pos > 0) {
-                   pos--;
-                   /* Erase char on screen (backspace, space, backspace) */
-                   vga_putchar('\b'); 
-                   vga_putchar(' ');
-                   vga_putchar('\b');
-                   /* Serial backspace */
-                   serial_putchar('\b');
-                   serial_putchar(' ');
-                   serial_putchar('\b');
-               }
-           }
-           /* Normal character */
-           else {
-               if (pos < CMD_BUF_SIZE - 1) {
-                   buf[pos++] = c;
-                   vga_putchar(c);
-                   serial_putchar(c);
-               }
-           }
-       } else {
-           idle();
-       }
+        swtch();
     }
+    
+    /* Should never return */
+    panic("scheduler returned");
 }
 
 void kmain(void) {
@@ -544,6 +567,9 @@ void kmain(void) {
     /* Clear VGA screen */
     vga_clear();
     
+    /* Setup TSS for user mode interrupts */
+    setup_tss();
+    
     /* Print banner */
     printf("Unix V6 x86 Port\n");
     printf("================\n");
@@ -556,6 +582,29 @@ void kmain(void) {
     
     /* Detect and configure memory */
     detect_memory();
+
+    /* Initialize core allocator map */
+    /* coremap manages memory from _end to maxmem */
+    /* Calculate start in 64-byte clicks */
+    /* _end is a byte address. We need to align up to 64 bytes */
+    uint32_t mem_start_byte = (uint32_t)_end;
+    uint32_t mem_start = (mem_start_byte + 63) / 64;
+    
+    /* maxmem is already in 64-byte clicks */
+    if (mem_start >= maxmem) {
+        panic("Kernel too large for memory");
+    }
+    
+    int free_mem = maxmem - mem_start;
+    
+    /* Initialize empty map */
+    /* Since coremap is bss (zeroed), it is already an empty map */
+    
+    /* Free the available memory into the map */
+    mfree(coremap, free_mem, mem_start);
+    
+    printf("Memory map initialized: start=%x size=%d clicks (%d KB)\n", 
+           mem_start, free_mem, (free_mem * 64) / 1024);
     
     /* Initialize clock */
     setup_clock();
@@ -574,11 +623,17 @@ void kmain(void) {
     /* Initialize process 0 */
     proc[0].p_stat = SRUN;
     proc[0].p_flag = SLOAD | SSYS;
-    proc[0].p_addr = (uint32_t)&u;      /* User structure address */
+    proc[0].p_pri = 127; /* Keep swapper lowest priority */
+    /* proc[0].p_addr must be in 64-byte clicks */
+    /* We allocate a dedicated backing store for Process 0 (swapper) */
+    /* This ensures P0 has a safe place to save its state when switching */
+    static struct user proc0_u __attribute__((aligned(64)));
+    proc[0].p_addr = ((uint32_t)&proc0_u) / 64;
     proc[0].p_size = USIZE;
     proc[0].p_pid = 0;
     proc[0].p_ppid = 0;
     curproc = &proc[0];
+    curpri = proc[0].p_pri;
     
     /* Link user structure to process */
     u.u_procp = &proc[0];
@@ -593,7 +648,9 @@ void kmain(void) {
     
     /* Initialize ramdisk FIRST - before binit */
     extern void rd_init(void);
+    extern void ide_init(void);
     rd_init();
+    ide_init();
 
     /* Initialize buffer cache */
     binit();
@@ -616,19 +673,31 @@ void kmain(void) {
 
     /* Mount root */
     rootdev = 0;  /* Ramdisk is major 0 */
-    rootdir = iget(rootdev, 1);
-    iput(rootdir); 
-    u.u_cdir = iget(rootdev, 1);
-    rootdir = u.u_cdir;
     
-    printf("Root mounted. rootdir=%x\n", rootdir);
+    /* Get root inode - this reference is kept permanently by the kernel */
+    rootdir = iget(rootdev, 1);
+    if (rootdir == NULL) {
+        panic("cannot mount root");
+    }
+    prele(rootdir);  /* Unlock but keep reference (i_count stays 1) */
+    
+    /* Get a SEPARATE reference for process 0's current directory */
+    /* This is the reference that will be iput'd when process exits */
+    u.u_cdir = iget(rootdev, 1);
+    if (u.u_cdir == NULL) {
+        panic("cannot get root for u.u_cdir");
+    }
+    prele(u.u_cdir);  /* Unlock but keep reference */
+    
+    printf("Root mounted. rootdir=%x u.u_cdir=%x i_count=%d\n", 
+           rootdir, u.u_cdir, rootdir->i_count);
 
     /* 
      * Manually open /dev/console for init process
      * We do this for Process 0, which Process 1 inherits
      */
     struct inode *cp;
-    cp = iget(rootdev, 5); /* /dev/console is inode 5 */
+    cp = iget(rootdev, 6); /* /dev/console is inode 6 */
     if (cp) {
         /* Assign to file descriptor 0, 1, 2 */
         /* Note: This is hacky direct assignment for bootstrap */
@@ -637,6 +706,7 @@ void kmain(void) {
             fp->f_flag = FREAD | FWRITE;
             fp->f_inode = cp;
             fp->f_inode->i_count++;
+            prele(cp);
             
             u.u_ofile[0] = fp;
             u.u_ofile[1] = fp;
@@ -647,54 +717,16 @@ void kmain(void) {
             fp->f_count = 3; 
             
             printf("Console opened on fd 0,1,2\n");
+        } else {
+            iput(cp);
         }
     }
     
-    /*
-     * Phase 5: Create init process and enter scheduler
-     */
-    printf("\nBootstraping /etc/init...\n");
-    
-    /* 
-     * Manually setup process 1
-     */
-    struct proc *p1 = &proc[1];
-    p1->p_stat = SRUN;
-    p1->p_flag = SLOAD;
-    p1->p_pid = 1;
-    p1->p_ppid = 0;
-    p1->p_size = USIZE;
-    p1->p_uid = 0;
-    p1->p_textp = NULL;
-    
-    /* Allocate storage for P1 */
-    p1->p_addr = (uint32_t)&p1_u;
-    
-    /* Setup P1 context */
-    /* 1. Copy current U (P0) as a template */
-    bcopy(&u, &p1_u, sizeof(struct user));
-    
-    /* 2. Setup P1's stack */
-    /* Push start_init address onto P1's stack */
-    uint32_t *sp = (uint32_t *)&p1_stack[4096];
-    *(--sp) = (uint32_t)start_init;
-    
-    /* 3. Setup P1's saved context to resume at sp */
-    p1_u.u_rsav[0] = (uint32_t)sp;      /* ESP points to return address */
-    p1_u.u_rsav[1] = (uint32_t)sp;      /* EBP (can be same as ESP for now) */
-    
-    printf("\n");
-    printf("======================================\n");
-    printf("Unix V6 x86 kernel initialization complete\n");
-    printf("======================================\n\n");
-    
-    printf("Entering scheduler...\n");
-    
-    /* Enter scheduler loop (as Process 0) */
-    sched();
-    
-    /* Should never return */
-    panic("sched returned");
+    /* Switch to process 0's u-area stack before creating init */
+    uint32_t new_esp = (uint32_t)u.u_stack + sizeof(u.u_stack);
+    new_esp &= ~3; /* Align to 4 bytes */
+    switch_stack_and_call(new_esp, proc0_main);
+    __builtin_unreachable();
 }
 
 /*
@@ -712,24 +744,28 @@ void kmain(void) {
  */
 int estabur(int nt, int nd, int ns, int sep) {
     /* Check limits */
-    /* x86 has much larger address space, but we keep V6 limits concept? 
-       Actually V6 limits were 64KB. We probably allow more.
-       Let's check against MAXMEM and ensure no overflow. */
-       
+    /* x86 has much larger address space, but we check against physical RAM size */
+    
     if (sep) {
-        /* Check separate limits if relevant */
+        /* We typically don't support separate I/D in this simple flat port 
+         * unless we use sophisticated segmentation.
+         * For now, treat as error or ignore? 
+         * Classic V6 treated sep=1 as valid if hardware supported it.
+         * We will just check total size.
+         */
     }
     
-    if (nt + nd + ns + USIZE > MAXMEM) {
+    if (nt + nd + ns + USIZE > maxmem) {
         u.u_error = ENOMEM;
         return -1;
     }
     
     /* 
-     * Setup hardware registers/page tables.
-     * For x86 simple port, we might assume flat model or setup GDT/LDT 
-     * but we don't have fields in user structure yet for this specific port style.
-     * We assume this is handled by core memory management.
+     * In a flat memory model (all segments 0-4GB), we don't need to change 
+     * segmentation registers here. 
+     * Real protection would require updating GDT/LDT or CR3 (Paging).
+     * For now, we assume a cooperative or single-user-like environment 
+     * or rely on the fact effectively we are valid.
      */
      
     return 0;

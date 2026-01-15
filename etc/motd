@@ -1,0 +1,11 @@
+# /etc/motd - Message of the Day
+# Unix V6 x86 Port
+
+======================================
+     Unix V6 x86 Port
+     
+  Original: Bell Labs, 1975
+  Architecture: PDP-11 -> x86
+  
+  Type 'help' for commands
+======================================
