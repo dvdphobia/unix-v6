@@ -59,6 +59,23 @@ void signal(void *tp, int sig) {
 }
 
 /*
+ * pgsignal - Send signal to all processes in a process group
+ */
+void pgsignal(int pgid, int sig) {
+    struct proc *p;
+    
+    if (pgid <= 0) {
+        return;
+    }
+    
+    for (p = &proc[0]; p < &proc[NPROC]; p++) {
+        if (p->p_pgrp == pgid) {
+            psignal(p, sig);
+        }
+    }
+}
+
+/*
  * psignal - Send the specified signal to the specified process
  */
 void psignal(struct proc *p, int sig) {
@@ -97,6 +114,14 @@ int issig(void) {
             stop();
             n = p->p_sig;
             if (n == 0) {
+                return 0;
+            }
+        }
+        
+        /* Check signal mask (SIGKIL is not maskable) */
+        if (n != SIGKIL) {
+            uint16_t mask = (uint16_t)(1U << (n - 1));
+            if (p->p_sigmask & mask) {
                 return 0;
             }
         }
@@ -168,16 +193,17 @@ void psig(void) {
         /* Set up user stack for signal handler */
         ar0 = u.u_ar0;
         
-        /* Push return address and flags on user stack */
+        /* Push restorer, return address, and flags on user stack */
         uint32_t sp = ar0[ESP_SAVE];
-        sp -= 8;
+        sp -= 12;
         
         /* Grow stack if needed */
         grow(sp);
         
-        /* Push EFLAGS and return address */
-        suword((caddr_t)(sp + 4), ar0[EFLAGS]);
-        suword((caddr_t)sp, ar0[EIP]);
+        /* Stack layout: [restorer][old EIP][old EFLAGS] */
+        suword((caddr_t)sp, (int)u.u_sigrest[n]);
+        suword((caddr_t)(sp + 4), ar0[EIP]);
+        suword((caddr_t)(sp + 8), ar0[EFLAGS]);
         
         ar0[ESP_SAVE] = sp;
         ar0[EFLAGS] &= ~0x100;  /* Clear trace flag */

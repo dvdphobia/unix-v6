@@ -32,6 +32,11 @@ struct proc {
     struct tty  *p_ttyp;        /* Controlling tty (pointer) */
     pid_t       p_pid;          /* Unique process ID */
     pid_t       p_ppid;         /* Process ID of parent */
+    pid_t       p_pgrp;         /* Process group ID */
+    pid_t       p_sid;          /* Session ID */
+    uint16_t    p_umask;        /* File creation mask */
+    uint16_t    p_sigmask;      /* Signal mask (bitset) */
+    uint16_t    p_exit;         /* Exit status for wait() */
     uint32_t    p_addr;         /* Address of swappable image */
     uint32_t    p_size;         /* Size of swappable image (in 64-byte units) */
     uint32_t    p_wchan;        /* Event process is awaiting */

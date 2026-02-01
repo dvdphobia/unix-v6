@@ -1,0 +1,17 @@
+# mode path source
+0000755 /etc/init build/userland/init.bin
+0000755 /bin/sh build/userland/sh.bin
+0000755 /bin/ls build/userland/ls.bin
+0000755 /bin/cat build/userland/cat.bin
+0000755 /bin/echo build/userland/echo.bin
+0000755 /bin/pwd build/userland/pwd.bin
+0000755 /bin/hello build/userland/hello.bin
+0000755 /bin/netdemo build/userland/netdemo.bin
+0000755 /bin/ps build/userland/ps.bin
+0000755 /bin/uname build/userland/uname.bin
+0000755 /bin/clear build/userland/clear.bin
+0000755 /bin/help build/userland/help.bin
+0000755 /bin/pwd_test build/userland/pwd_test.bin
+0000644 /etc/motd etc/motd
+0000644 /etc/passwd etc/passwd
+0000644 /etc/group etc/group

@@ -12,7 +12,7 @@
 extern void printf(const char *fmt, ...);
 extern void sleep(void *chan, int pri);
 extern void wakeup(void *chan);
-extern void psignal(struct proc *p, int sig);
+extern void pgsignal(int pgid, int sig);
 
 extern struct proc *curproc;
 extern struct user u;
@@ -132,17 +132,13 @@ void ttyinput(int c, struct tty *tp) {
         /* Handle special characters */
         if (c == CINTR) {
             flushtty(tp);
-            if (tp->t_pgrp) {
-                psignal(tp->t_pgrp, SIGINT);
-            }
+            pgsignal(tp->t_pgid, SIGINT);
             return;
         }
         
         if (c == CQUIT) {
             flushtty(tp);
-            if (tp->t_pgrp) {
-                psignal(tp->t_pgrp, SIGQUIT);
-            }
+            pgsignal(tp->t_pgid, SIGQUIT);
             return;
         }
         

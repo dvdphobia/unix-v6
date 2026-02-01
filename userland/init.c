@@ -23,6 +23,7 @@ int main() {
         pid = fork();
         if (pid == 0) {
             exec("/bin/sh", argv);
+            write(1, "exec failed\n", 13);
             exit(1);
         }
         while(wait(0) != -1);

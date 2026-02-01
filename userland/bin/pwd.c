@@ -1,0 +1,21 @@
+/* pwd.c - Print working directory */
+
+#include <stddef.h>
+#include "../syscalls.h"
+
+int main(void) {
+    char buf[256];
+    char *result;
+    
+    result = getcwd(buf, sizeof(buf));
+    
+    if (result == NULL) {
+        write(1, "pwd: getcwd failed\n", 19);
+        return 1;
+    }
+    
+    write(1, result, 256);  /* Simple - prints up to 256 chars */
+    write(1, "\n", 1);
+    return 0;
+}
+/* pwd.c - Print working directory */

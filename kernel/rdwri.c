@@ -18,6 +18,7 @@
 extern struct user u;
 extern struct cdevsw cdevsw[];
 extern blkno_t rablock;
+extern time_t time[];
 extern struct buf *bread(dev_t dev, daddr_t blkno);
 extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
 extern struct buf *getblk(dev_t dev, daddr_t blkno);
@@ -83,6 +84,7 @@ void readi(struct inode *ip) {
     }
     
     ip->i_flag |= IACC;
+    ip->i_atime = time[1];
     
     /* Character device */
     if ((ip->i_mode & IFMT) == IFCHR) {
@@ -158,6 +160,8 @@ void writei(struct inode *ip) {
     uint32_t newsize;
     
     ip->i_flag |= IACC | IUPD;
+    ip->i_mtime = time[1];
+    ip->i_ctime = time[1];
     
     /* Character device */
     if ((ip->i_mode & IFMT) == IFCHR) {

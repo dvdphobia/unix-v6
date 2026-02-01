@@ -37,7 +37,7 @@ struct tty {
     int8_t      t_kill;         /* Kill (line delete) character */
     int8_t      t_char;         /* Character temporary */
     int8_t      t_speeds;       /* Input/output speeds */
-    struct proc *t_pgrp;        /* Process group (for signals) */
+    int16_t     t_pgid;         /* Foreground process group id */
 };
 
 /* TTY mode flags (set by stty) */

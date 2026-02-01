@@ -51,6 +51,7 @@
 #define SIGHUP      1           /* Hangup */
 #define SIGINT      2           /* Interrupt (rubout) */
 #define SIGQIT      3           /* Quit (FS) */
+#define SIGQUIT     SIGQIT
 #define SIGINS      4           /* Illegal instruction */
 #define SIGTRC      5           /* Trace or breakpoint */
 #define SIGIOT      6           /* IOT */
@@ -61,6 +62,9 @@
 #define SIGSEG      11          /* Segmentation violation */
 #define SIGSYS      12          /* Bad system call */
 #define SIGPIPE     13          /* End of pipe */
+#define SIGALRM     14          /* Alarm clock */
+#define SIGTERM     15          /* Termination */
+#define SIGCHLD     17          /* Child status changed */
 
 /*
  * Fundamental constants

@@ -62,6 +62,10 @@ loop:
         prele(ip);
         if (ip->i_count < 2)
             return;
+        if (fp->f_flag & FNONBLOCK) {
+            u.u_error = EAGAIN;
+            return;
+        }
         ip->i_mode |= IREAD;
         sleep(ip+2, PPIPE);
         goto loop;
@@ -104,6 +108,11 @@ loop:
     }
     
     if (ip->i_size1 == PIPSIZ) {
+        if (fp->f_flag & FNONBLOCK) {
+            prele(ip);
+            u.u_error = EAGAIN;
+            return;
+        }
         ip->i_mode |= IWRITE;
         prele(ip);
         sleep(ip+1, PPIPE);

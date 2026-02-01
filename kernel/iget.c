@@ -125,6 +125,10 @@ loop:
         p->i_addr[i] = dp->di_addr[i];
     }
     
+    p->i_atime = ((time_t)dp->di_atime[0] << 16) | dp->di_atime[1];
+    p->i_mtime = ((time_t)dp->di_mtime[0] << 16) | dp->di_mtime[1];
+    p->i_ctime = p->i_mtime;
+    
     brelse(bp);
     return p;
 }
@@ -206,13 +210,14 @@ void iupdat(struct inode *p, time_t *tm) {
     }
     
     /* Update times - di_atime and di_mtime are uint16_t[2] arrays */
+    (void)tm;
     if (p->i_flag & IACC) {
-        dp->di_atime[0] = (uint16_t)(tm[1] >> 16);
-        dp->di_atime[1] = (uint16_t)(tm[1] & 0xFFFF);
+        dp->di_atime[0] = (uint16_t)(p->i_atime >> 16);
+        dp->di_atime[1] = (uint16_t)(p->i_atime & 0xFFFF);
     }
     if (p->i_flag & IUPD) {
-        dp->di_mtime[0] = (uint16_t)(tm[1] >> 16);
-        dp->di_mtime[1] = (uint16_t)(tm[1] & 0xFFFF);
+        dp->di_mtime[0] = (uint16_t)(p->i_mtime >> 16);
+        dp->di_mtime[1] = (uint16_t)(p->i_mtime & 0xFFFF);
     }
     
     bwrite(bp);
@@ -343,6 +348,9 @@ struct inode *maknode(mode_t mode) {
     ip->i_nlink = 1;
     ip->i_uid = u.u_uid;
     ip->i_gid = u.u_gid;
+    ip->i_atime = time[1];
+    ip->i_mtime = time[1];
+    ip->i_ctime = time[1];
     
     wdir(ip);
     return ip;

@@ -56,6 +56,63 @@ int profil(void);
 int setgid(void);
 int getgid(void);
 int ssig(void);
+int getcwd(void);
+int sys_exit(void);
+int truncate(void);
+int ftruncate(void);
+int fsync(void);
+int utime(void);
+int sys_pipe(void);
+int sys_dup(void);
+int sys_dup2(void);
+int sys_stat(void);
+int sys_fstat(void);
+int sys_lstat(void);
+int sys_link(void);
+int sys_unlink(void);
+int sys_rename(void);
+int sys_mkdir(void);
+int sys_rmdir(void);
+int sys_chmod(void);
+int sys_umask(void);
+int sys_brk(void);
+int sys_sbrk(void);
+int sys_sigaction(void);
+int sys_sigprocmask(void);
+int sys_sigsuspend(void);
+int sys_alarm(void);
+int sys_pause(void);
+int sys_time(void);
+int sys_gettimeofday(void);
+int sys_sleep(void);
+int sys_nanosleep(void);
+int sys_tcgetattr(void);
+int sys_tcsetattr(void);
+int sys_tcflush(void);
+int sys_ioctl(void);
+int sys_select(void);
+int sys_poll(void);
+int sys_getpgid(void);
+int sys_setpgid(void);
+int sys_getsid(void);
+int sys_setsid(void);
+int sys_mmap(void);
+int sys_munmap(void);
+int sys_getrlimit(void);
+int sys_setrlimit(void);
+int sys_getrusage(void);
+int sys_chown2(void);
+int sys_lchown(void);
+int sys_fchown(void);
+int sys_fchmod(void);
+int sys_utimes(void);
+int sys_fcntl(void);
+int sys_access(void);
+int sys_isatty(void);
+int sys_sigpending(void);
+int sys_sigreturn(void);
+int sys_mprotect(void);
+int sys_waitpid(void);
 
 /*
  * System call entry table
@@ -118,21 +175,63 @@ struct sysent sysent[] = {
     { 0, setgid },          /* 46 = setgid */
     { 0, getgid },          /* 47 = getgid */
     { 2, ssig },            /* 48 = sig */
-    { 0, nosys },           /* 49 = x */
-    { 0, nosys },           /* 50 = x */
-    { 0, nosys },           /* 51 = x */
-    { 0, nosys },           /* 52 = x */
-    { 0, nosys },           /* 53 = x */
-    { 0, nosys },           /* 54 = x */
-    { 0, nosys },           /* 55 = x */
-    { 0, nosys },           /* 56 = x */
-    { 0, nosys },           /* 57 = x */
-    { 0, nosys },           /* 58 = x */
-    { 0, nosys },           /* 59 = x */
-    { 0, nosys },           /* 60 = x */
-    { 0, nosys },           /* 61 = x */
-    { 0, nosys },           /* 62 = x */
-    { 0, nosys },           /* 63 = x */
+    { 2, getcwd },          /* 49 = getcwd */
+    { 1, sys_exit },        /* 50 = _exit */
+    { 2, truncate },        /* 51 = truncate */
+    { 2, ftruncate },       /* 52 = ftruncate */
+    { 1, fsync },           /* 53 = fsync */
+    { 2, utime },           /* 54 = utime */
+    { 0, sys_pipe },        /* 55 = pipe */
+    { 1, sys_dup },         /* 56 = dup */
+    { 2, sys_dup2 },        /* 57 = dup2 */
+    { 2, sys_stat },        /* 58 = stat */
+    { 2, sys_fstat },       /* 59 = fstat */
+    { 2, sys_lstat },       /* 60 = lstat */
+    { 2, sys_link },        /* 61 = link */
+    { 1, sys_unlink },      /* 62 = unlink */
+    { 2, sys_rename },      /* 63 = rename */
+    { 2, sys_mkdir },       /* 64 = mkdir */
+    { 1, sys_rmdir },       /* 65 = rmdir */
+    { 2, sys_chmod },       /* 66 = chmod */
+    { 1, sys_umask },       /* 67 = umask */
+    { 1, sys_brk },         /* 68 = brk */
+    { 1, sys_sbrk },        /* 69 = sbrk */
+    { 3, sys_sigaction },   /* 70 = sigaction */
+    { 3, sys_sigprocmask }, /* 71 = sigprocmask */
+    { 1, sys_sigsuspend },  /* 72 = sigsuspend */
+    { 1, sys_alarm },       /* 73 = alarm */
+    { 0, sys_pause },       /* 74 = pause */
+    { 1, sys_time },        /* 75 = time */
+    { 2, sys_gettimeofday },/* 76 = gettimeofday */
+    { 1, sys_sleep },       /* 77 = sleep */
+    { 1, sys_nanosleep },   /* 78 = nanosleep */
+    { 2, sys_tcgetattr },   /* 79 = tcgetattr */
+    { 3, sys_tcsetattr },   /* 80 = tcsetattr */
+    { 2, sys_tcflush },     /* 81 = tcflush */
+    { 3, sys_ioctl },       /* 82 = ioctl */
+    { 5, sys_select },      /* 83 = select */
+    { 3, sys_poll },        /* 84 = poll */
+    { 1, sys_getpgid },     /* 85 = getpgid */
+    { 2, sys_setpgid },     /* 86 = setpgid */
+    { 1, sys_getsid },      /* 87 = getsid */
+    { 0, sys_setsid },      /* 88 = setsid */
+    { 6, sys_mmap },        /* 89 = mmap */
+    { 2, sys_munmap },      /* 90 = munmap */
+    { 2, sys_getrlimit },   /* 91 = getrlimit */
+    { 2, sys_setrlimit },   /* 92 = setrlimit */
+    { 2, sys_getrusage },   /* 93 = getrusage */
+    { 3, sys_chown2 },      /* 94 = chown */
+    { 3, sys_lchown },      /* 95 = lchown */
+    { 3, sys_fchown },      /* 96 = fchown */
+    { 2, sys_fchmod },      /* 97 = fchmod */
+    { 2, sys_utimes },      /* 98 = utimes */
+    { 3, sys_fcntl },       /* 99 = fcntl */
+    { 2, sys_access },      /* 100 = access */
+    { 3, sys_waitpid },     /* 101 = waitpid */
+    { 1, sys_isatty },      /* 102 = isatty */
+    { 1, sys_sigpending },  /* 103 = sigpending */
+    { 0, sys_sigreturn },   /* 104 = sigreturn */
+    { 3, sys_mprotect },    /* 105 = mprotect */
 };
 
 /* Number of system calls */

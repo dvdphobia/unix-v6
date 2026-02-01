@@ -12,11 +12,46 @@
 #include "include/tty.h"
 #include "include/systm.h"
 
+/* Minimal termios support for console */
+#define LFLAG_ISIG   0x0001
+#define LFLAG_ICANON 0x0002
+#define LFLAG_ECHO   0x0008
+#define LFLAG_ECHOE  0x0010
+#define LFLAG_ECHOK  0x0020
+#define IFLAG_IGNCR  0x0001
+#define IFLAG_ICRNL  0x0002
+#define IFLAG_INLCR  0x0004
+#define OFLAG_OPOST  0x0001
+#define OFLAG_ONLCR  0x0002
+#define VINTR        0
+#define VQUIT        1
+#define VERASE       2
+#define VKILL        3
+#define VEOF         4
+
+struct termios_state {
+    uint32_t c_iflag;
+    uint32_t c_oflag;
+    uint32_t c_cflag;
+    uint32_t c_lflag;
+    uint8_t c_cc[20];
+};
+
+static struct termios_state con_termios = {
+    .c_iflag = IFLAG_ICRNL,
+    .c_oflag = OFLAG_OPOST | OFLAG_ONLCR,
+    .c_cflag = 0,
+    .c_lflag = LFLAG_ECHO | LFLAG_ECHOE | LFLAG_ECHOK | LFLAG_ICANON | LFLAG_ISIG,
+    .c_cc = { [VINTR] = 3, [VQUIT] = 28, [VERASE] = '\b', [VKILL] = '@', [VEOF] = 4 }
+};
+
 /* Defined in main.c */
 extern void vga_putchar(char c);
 extern void serial_putchar(char c);
 extern int subyte(caddr_t addr, int val);
 extern uint8_t inb(uint16_t port);
+extern int tty_get_pgid(void);
+extern void pgsignal(int pgid, int sig);
 
 /* Use a simple circular buffer for input */
 #define KBD_BUF_SIZE 128
@@ -71,6 +106,17 @@ int conclose(dev_t dev, int flag) {
  */
 int conread(dev_t dev) {
     (void)dev;
+    caddr_t start = u.u_base;
+    int canon = (con_termios.c_lflag & LFLAG_ICANON) != 0;
+    int echo = (con_termios.c_lflag & LFLAG_ECHO) != 0;
+    int echoe = (con_termios.c_lflag & LFLAG_ECHOE) != 0;
+    int echok = (con_termios.c_lflag & LFLAG_ECHOK) != 0;
+    int isig = (con_termios.c_lflag & LFLAG_ISIG) != 0;
+    int erase = con_termios.c_cc[VERASE] ? con_termios.c_cc[VERASE] : '\b';
+    int intr = con_termios.c_cc[VINTR] ? con_termios.c_cc[VINTR] : 3;
+    int quit = con_termios.c_cc[VQUIT] ? con_termios.c_cc[VQUIT] : 28;
+    int eofc = con_termios.c_cc[VEOF] ? con_termios.c_cc[VEOF] : 4;
+    int killc = con_termios.c_cc[VKILL] ? con_termios.c_cc[VKILL] : '@';
     
     while (u.u_count > 0) {
         int c;
@@ -80,16 +126,91 @@ int conread(dev_t dev) {
                 c = inb(0x3F8);
                 break;
             }
-            sleep(&kbd_wait, PRIBIO);
+            /* No IRQ wakeups on serial-only configs (e.g. -serial stdio). */
+            __asm__ __volatile__("pause");
         }
         
-        if (c == '\r') {
-            c = '\n';
+        if (con_termios.c_iflag & IFLAG_IGNCR) {
+            if (c == '\r') {
+                continue;
+            }
+        }
+        if (con_termios.c_iflag & IFLAG_ICRNL) {
+            if (c == '\r') {
+                c = '\n';
+            }
+        } else if (con_termios.c_iflag & IFLAG_INLCR) {
+            if (c == '\n') {
+                c = '\r';
+            }
+        }
+        
+        /* Basic line editing: handle signals and erase/kill */
+        if (isig && c == intr) {
+            pgsignal(tty_get_pgid(), SIGINT);
+            continue;
+        }
+        if (isig && c == quit) {
+            pgsignal(tty_get_pgid(), SIGQUIT);
+            continue;
+        }
+        if (canon && (c == erase || c == 0x7f)) {
+            if (u.u_base > start) {
+                u.u_base--;
+                u.u_count++;
+                /* Erase last character on console */
+                if (echo) {
+                    if (echoe) {
+                        vga_putchar('\b');
+                        vga_putchar(' ');
+                        vga_putchar('\b');
+                        serial_putchar('\b');
+                        serial_putchar(' ');
+                        serial_putchar('\b');
+                    } else {
+                        vga_putchar('\b');
+                        serial_putchar('\b');
+                    }
+                }
+            }
+            continue;
+        }
+        if (canon && c == killc) {
+            while (u.u_base > start) {
+                u.u_base--;
+                u.u_count++;
+                if (echo) {
+                    if (echoe) {
+                        vga_putchar('\b');
+                        vga_putchar(' ');
+                        vga_putchar('\b');
+                        serial_putchar('\b');
+                        serial_putchar(' ');
+                        serial_putchar('\b');
+                    } else {
+                        vga_putchar('\b');
+                        serial_putchar('\b');
+                    }
+                }
+            }
+            if (echo && echok) {
+                vga_putchar('\n');
+                serial_putchar('\n');
+            }
+            continue;
+        }
+        if (canon && c == eofc) {
+            if (u.u_base == start) {
+                return 0;
+            }
+            break;
         }
 
         /* Echo typed characters for simple user shell interaction */
-        vga_putchar(c);
-        serial_putchar(c);
+        if (echo) {
+            vga_putchar(c);
+            serial_putchar(c);
+        }
         
         if (subyte(u.u_base, c) < 0) {
             u.u_error = EFAULT;
@@ -98,7 +219,10 @@ int conread(dev_t dev) {
         u.u_base++;
         u.u_count--;
         
-        if (c == '\n') {
+        if (canon && c == '\n') {
+            break;
+        }
+        if (!canon) {
             break;
         }
     }
@@ -107,6 +231,45 @@ int conread(dev_t dev) {
 
 extern int cpass(void);
 extern uint8_t inb(uint16_t port);
+
+int console_get_termios(void *dst, int size) {
+    if (size < (int)sizeof(con_termios)) {
+        return -1;
+    }
+    char *d = (char *)dst;
+    char *s = (char *)&con_termios;
+    for (int i = 0; i < (int)sizeof(con_termios); i++) {
+        d[i] = s[i];
+    }
+    return 0;
+}
+
+int console_set_termios(const void *src, int size) {
+    if (size < (int)sizeof(con_termios)) {
+        return -1;
+    }
+    const char *s = (const char *)src;
+    char *d = (char *)&con_termios;
+    for (int i = 0; i < (int)sizeof(con_termios); i++) {
+        d[i] = s[i];
+    }
+    return 0;
+}
+
+int console_has_input(void) {
+    if (kbd_read_ptr != kbd_write_ptr) {
+        return 1;
+    }
+    if (inb(0x3F8 + 5) & 0x01) {
+        return 1;
+    }
+    return 0;
+}
+
+void console_flush_input(void) {
+    kbd_read_ptr = 0;
+    kbd_write_ptr = 0;
+}
 
 /* Simple US Keyboard Map (Scan Code Set 1) */
 static char kbd_us[128] = {
@@ -195,7 +358,9 @@ int conwrite(dev_t dev) {
         if (c < 0) break;
         
         /* Newline translation */
-        if (c == '\n') {
+        if ((con_termios.c_oflag & OFLAG_OPOST) &&
+            (con_termios.c_oflag & OFLAG_ONLCR) &&
+            c == '\n') {
             vga_putchar('\r'); /* VGA needs CR+LF */
             serial_putchar('\r');
         }

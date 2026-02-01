@@ -73,16 +73,17 @@ void trap(uint32_t *frame) {
     uint32_t trapno;
     uint32_t err;
     uint32_t eip;
+    uint32_t *prev_ar0 = u.u_ar0;
     
     /* Debug print for ALL traps */
     trapno = frame[TRAPNO];
     /* if (trapno == 0x80) {
-        printf("SYSCALL: %d\n", frame[EAX]);
-    } else if (trapno >= 32 && trapno < 48) {
-         Hardware IRQs - ignore to avoid console spam 
-    } else {
+        printf("SYSCALL: %d from EIP=%x\n", frame[EAX], frame[EIP]);
+    } else */ if (trapno >= 32 && trapno < 48) {
+        /* Hardware IRQs - ignore to avoid console spam */
+    } else if (trapno != 0x80) {
         printf("TRAP: %d EIP=%x CS=%x\n", trapno, frame[EIP], frame[CS]);
-    } */
+    }
     uint32_t cs;
     uint32_t eflags;
     int from_user;
@@ -286,7 +287,14 @@ void trap(uint32_t *frame) {
         u.u_error = 0;
         
         /* Get system call number from EAX */
-        i = frame[EAX] & 0x3F;  /* Mask to 64 calls like V6 */
+        i = frame[EAX];
+        extern int nsysent;
+        if (i < 0 || i >= nsysent) {
+            u.u_error = EINVAL;
+            frame[EFLAGS] |= EFLAGS_CF;
+            frame[EAX] = u.u_error;
+            break;
+        }
         callp = &sysent[i];
         
         /* Get arguments from stack or registers */
@@ -300,6 +308,7 @@ void trap(uint32_t *frame) {
         u.u_arg[2] = frame[EDX];
         u.u_arg[3] = frame[ESI];
         u.u_arg[4] = frame[EDI];
+        u.u_arg[5] = fuword((caddr_t)frame[UESP]);
         
         /* Call the system call handler */
         /* printf("trap: calling syscall handler, arg0=%x arg1=%x\n", u.u_arg[0], u.u_arg[1]); */
@@ -375,6 +384,9 @@ userret:
     /* Process pending signal before returning to user mode */
     if (from_user && issig()) {
         psig();
+    }
+    if (!from_user) {
+        u.u_ar0 = prev_ar0;
     }
     /* printf("trap: returning to user EIP=%x\n", frame[EIP]); */
     return;

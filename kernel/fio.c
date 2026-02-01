@@ -82,6 +82,7 @@ found_fd:
 
 found_fp:
     u.u_ofile[i] = fp;
+    u.u_fdflags[i] = 0;
     u.u_ar0[EAX] = i;
     fp->f_count = 1;
     fp->f_offset[0] = 0;

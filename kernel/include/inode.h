@@ -31,6 +31,9 @@ struct inode {
     uint32_t    i_size1;        /* Least significant bytes of size */
     daddr_t     i_addr[8];      /* Disk block addresses */
     blkno_t     i_lastr;        /* Last logical block read (for read-ahead) */
+    time_t      i_atime;        /* Last access time */
+    time_t      i_mtime;        /* Last modification time */
+    time_t      i_ctime;        /* Last status change time */
 };
 
 /* Inode flags */
@@ -40,6 +43,7 @@ struct inode {
 #define IMOUNT      010         /* Inode is mounted on */
 #define IWANT       020         /* Some process waiting on lock */
 #define ITEXT       040         /* Inode is pure text prototype */
+#define ICHG        0100        /* Inode metadata changed */
 
 /* File type and mode bits */
 #define IALLOC      0100000     /* File is used (allocated) */
@@ -48,6 +52,7 @@ struct inode {
 #define IFCHR       020000      /* Character special */
 #define IFBLK       060000      /* Block special (0 = regular) */
 #define IFREG       000000      /* Regular file */
+#define IFIFO       010000      /* FIFO/Named pipe */
 #define ILARG       010000      /* Large addressing algorithm */
 #define ISUID       04000       /* Set user ID on execution */
 #define ISGID       02000       /* Set group ID on execution */

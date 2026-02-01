@@ -15,7 +15,6 @@ The project follows a macOS/BSD-style directory layout:
 ```
 unix-v6/
 ├── bin/                    # User commands and utilities
-│   └── builtin/           # Shell built-in commands (ls, cd, pwd, etc.)
 ├── sbin/                   # System binaries
 ├── etc/                    # System configuration files
 │   ├── passwd             # User database
@@ -58,7 +57,7 @@ unix-v6/
 ### Quick Build
 
 ```bash
-make           # Build userspace + kernel
+make           # Build userland + kernel
 make iso       # Create bootable ISO
 make run       # Run in QEMU (serial)
 ```
@@ -67,8 +66,8 @@ See `docs/GETTING_STARTED.md` for the full build and extension guide.
 
 ### Userspace Programs
 
-User programs live in `userspace/bin` and are compiled into flat binaries.
-The ramdisk is populated from `userspace/ramdisk.manifest` during the build.
+User programs live in `userland/bin` and are compiled into flat binaries.
+The ramdisk is populated from `userland/ramdisk.manifest` during the build.
 Example apps include `hello` and `netdemo` (network stub).
 
 ## Shell Commands

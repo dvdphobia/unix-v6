@@ -16,6 +16,7 @@
 #include "include/buf.h"
 #include "include/file.h"
 #include "include/conf.h"
+#include "include/reg.h"
 
 /*
  * Icode is the bootstrap program executed in user mode
@@ -491,51 +492,72 @@ static void proc0_main(void) {
     /* 
      * Create init process using newproc
      */
+    extern int exec(void);
     int np = newproc();
-    if (np) {
-        /* Child (P1) resumes here */
-        /* Ensure user segments and kernel stack for P1 are active */
-        update_pos(u.u_procp);
-        /* Expand memory to hold icode */
-        /* Size = USIZE + icode size (rounded to clicks) */
-        int icode_clicks = (sizeof(icode) + 63) / 64;
-        expand(USIZE + icode_clicks);
-        
-        /* Copy icode to user virtual 0 (physical p_addr + USIZE) */
-        /* We access physical memory directly since we are in kernel */
-        uint32_t user_base = (u.u_procp->p_addr + USIZE) * 64;
-        bcopy(icode, (void*)user_base, sizeof(icode));
-        
-        /* 
-         * Return to user mode to execute icode.
-         * We need to push a trap frame (SS, ESP, EFLAGS, CS, EIP) 
-         * and execute IRET, or rely on retu returning to a trampoline.
-         * Since we are in the middle of initialization, the stack we are on
-         * is the kernel stack for P1.
+    if (np == 1) {
+        /* Child (P1) resumes here - we're in kernel mode */
+        /* CRITICAL: After fork, the global 'u' points to parent's u-area in kernel memory!
+         * The child is now running in its own memory space. The child's u-area is located 
+         * at address: p_addr * 64 bytes
          * 
-         * Logic: 
-         * kmain called newproc. 
-         * newproc (in child) returned 1.
-         * We are in kmain (child).
-         * We want to 'return' to user mode address 0.
-         * 
-         * We can construct a frame on the stack and call a helper.
+         * The child can access its own u-area through:
+         * 1. The parent's kernel `u` symbol (points to PARENT's u-area) - WRONG
+         * 2. Directly via p_addr calculation - CORRECT
+         *
+         * The parent's code updated u.u_ar0 before fork, but we're now in the child.
+         * The child needs to set up its own u.u_ar0 to point to the child's frame!
          */
-         
-         /* Helper to jump to user mode */
-         /* Arguments: entry point, stack pointer (top of memory) */
-         /* Stack is at top of allocated memory. 64-byte clicks. */
-         /* Size is (USIZE + icode_clicks) * 64 */
-         /* User stack pointer = icode_clicks * 64? NO. 
-            V6 exec puts stack at the top of the segment.
-            Our segment size is (USIZE + icode_clicks).
-            User limit is icode_clicks * 64.
-            So SP = icode_clicks * 64.
+        struct proc *cp = u.u_procp;  /* Get our own proc entry - this works because u_procp was updated by newproc */
+        struct user *child_u_area = (struct user *)(cp->p_addr * 64);
+        
+        /* Just set up a minimal trap frame and call exec */
+        static uint32_t init_frame[19];  /* Stable storage for init's trap frame */
+        uint32_t *frame = init_frame;
+        int i;
+        
+        /* Zero the frame */
+        for (i = 0; i < 19; i++) {
+            frame[i] = 0;
+        }
+        
+        /* Set up user mode segments */
+        frame[GS] = 0x23;
+        frame[FS] = 0x23;
+        frame[ES] = 0x23;
+        frame[DS] = 0x23;
+        frame[CS] = 0x1B;  /* User code segment */
+        frame[USS] = 0x23; /* User stack segment */
+        frame[EFLAGS] = 0x202; /* IF enabled */
+        
+        /* Point the CHILD's u_ar0 to this frame.
+         * NOTE: We're setting u.u_ar0 which accesses the PARENT's u-area through the global symbol!
+         * We actually need to set the CHILD's u_ar0, which is in the child's u-area memory!
          */
-         extern void return_to_user(uint32_t ip, uint32_t sp);
-         return_to_user(0, icode_clicks * 64);
-         /* Should not return */
-         panic("return_to_user failed");
+        child_u_area->u_ar0 = frame;
+        
+        /* But exec() accesses the global 'u', so we also need to set the global u's u_ar0
+         * for exec() to work correctly. This is a hack but necessary given the architecture.
+         */
+        u.u_ar0 = frame;
+        
+        /* Set up exec arguments */
+        u.u_arg[0] = (int)"/etc/init";
+        u.u_arg[1] = 0;  /* No argv for now */
+        
+        /* Call exec - it will set up EIP and UESP in the frame via u.u_ar0 */
+        exec();
+        
+        if (u.u_error) {
+            printf("init: exec failed, error=%d\n", u.u_error);
+            for(;;);
+        }
+        
+        /* Now jump to user mode using the frame we set up */
+        extern void return_to_user(uint32_t ip, uint32_t sp);
+        return_to_user(u.u_ar0[EIP], u.u_ar0[UESP]);
+        
+        /* Should not return */
+        panic("return_to_user failed in init");
     }
 
     printf("\n");
@@ -618,6 +640,11 @@ void kmain(void) {
     /* Clear process table */
     for (i = 0; i < NPROC; i++) {
         proc[i].p_stat = SNULL;
+        proc[i].p_umask = 0;
+        proc[i].p_sigmask = 0;
+        proc[i].p_exit = 0;
+        proc[i].p_pgrp = 0;
+        proc[i].p_sid = 0;
     }
     
     /* Initialize process 0 */
@@ -632,6 +659,11 @@ void kmain(void) {
     proc[0].p_size = USIZE;
     proc[0].p_pid = 0;
     proc[0].p_ppid = 0;
+    proc[0].p_umask = 0;
+    proc[0].p_sigmask = 0;
+    proc[0].p_exit = 0;
+    proc[0].p_pgrp = proc[0].p_pid;
+    proc[0].p_sid = proc[0].p_pid;
     curproc = &proc[0];
     curpri = proc[0].p_pri;
     

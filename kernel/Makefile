@@ -25,13 +25,10 @@ ASM_OBJS      = $(ASM_SRCS:.S=.o)
 
 # Source files - C (ported from original V6)
 # Kernel core
-KERNEL_SRCS   = main.c shell.c slp.c trap.c sysent.c bio.c alloc.c iget.c nami.c fio.c rdwri.c sig.c sys.c tty.c malloc.c clock.c pipe.c text.c
+KERNEL_SRCS   = main.c slp.c trap.c sysent.c bio.c alloc.c iget.c nami.c fio.c rdwri.c sig.c sys.c tty.c malloc.c clock.c pipe.c text.c
 # Drivers
 DRIVER_SRCS   = drivers/block/ramdisk.c drivers/block/ide.c drivers/char/console.c
-# Built-in commands (from /bin/builtin)
-BUILTIN_SRCS  = ../bin/builtin/ls.c ../bin/builtin/cd.c ../bin/builtin/pwd.c ../bin/builtin/echo.c ../bin/builtin/ps.c ../bin/builtin/uname.c ../bin/builtin/cat.c
-
-C_SRCS        = $(KERNEL_SRCS) $(DRIVER_SRCS) $(BUILTIN_SRCS)
+C_SRCS        = $(KERNEL_SRCS) $(DRIVER_SRCS)
 C_OBJS        = $(C_SRCS:.c=.o)
 
 # All objects
@@ -43,10 +40,10 @@ KERNEL_BIN    = kernel.bin
 ISO_FILE      = unix_v6.iso
 RAMDISK_H     = drivers/block/ramdisk_files.h
 RAMDISK_GEN   = ../tools/gen_ramdisk_files.py
-RAMDISK_MAN   = ../userspace/ramdisk.manifest
+RAMDISK_MAN   = ../userland/ramdisk.manifest
 
 # Phony targets (not actual files)
-.PHONY: all clean build iso run run-vga debug help userspace toolchain
+.PHONY: all clean build iso run run-vga debug help userland toolchain
 
 # Default target
 all: $(KERNEL_ELF)
@@ -68,17 +65,17 @@ help:
 # Build target (alias for all)
 build: toolchain $(KERNEL_ELF)
 
-# Build userspace before generating the ramdisk header
-userspace:
-	@$(MAKE) -C ../userspace
+# Build userland before generating the ramdisk header
+userland:
+	@$(MAKE) -C ../userland
 
 # Compile assembly files
 %.o: %.S
 	@echo "AS  $<"
 	@$(AS) $(ASFLAGS) -o $@ $<
 
-# Generate ramdisk header (from userspace manifest)
-$(RAMDISK_H): userspace $(RAMDISK_MAN) $(RAMDISK_GEN)
+# Generate ramdisk header (from userland manifest)
+$(RAMDISK_H): userland $(RAMDISK_MAN) $(RAMDISK_GEN)
 	@echo "GEN $@"
 	@python3 $(RAMDISK_GEN) --manifest $(RAMDISK_MAN) --output $(RAMDISK_H)
 

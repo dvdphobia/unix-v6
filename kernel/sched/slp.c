@@ -170,6 +170,11 @@ int newproc(void) {
     rpp->p_nice = curproc->p_nice;
     rpp->p_pid = mpid;
     rpp->p_ppid = curproc->p_pid;
+    rpp->p_umask = curproc->p_umask;
+    rpp->p_sigmask = curproc->p_sigmask;
+    rpp->p_exit = 0;
+    rpp->p_pgrp = curproc->p_pgrp ? curproc->p_pgrp : curproc->p_pid;
+    rpp->p_sid = curproc->p_sid ? curproc->p_sid : curproc->p_pid;
     rpp->p_time = 0;
     rpp->p_cpu = 0;
     rpp->p_pri = PUSER;

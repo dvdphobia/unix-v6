@@ -20,7 +20,8 @@ struct inode {
     int8_t      i_nlink;        /* Number of links */
     uid_t       i_uid;          /* Owner */
     gid_t       i_gid;          /* Group */
-    off_t       i_size;         /* Size of file */
+    uint8_t     i_size0;        /* High byte of size */
+    uint16_t    i_size1;        /* Low 16 bits of size */
     daddr_t     i_addr[8];      /* Block addresses */
     time_t      i_atime;        /* Access time */
     time_t      i_mtime;        /* Modification time */

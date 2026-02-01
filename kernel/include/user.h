@@ -57,9 +57,10 @@ struct user {
 
     /* Open files */
     struct file *u_ofile[NOFILE]; /* Pointers to file structures */
+    uint8_t     u_fdflags[NOFILE];/* Per-fd flags (e.g., close-on-exec) */
 
     /* System call interface */
-    uint32_t    u_arg[5];       /* Arguments to current system call */
+    uint32_t    u_arg[6];       /* Arguments to current system call */
     uint32_t    *u_ar0;         /* Address of saved registers */
 
     /* Memory sizes */
@@ -72,6 +73,7 @@ struct user {
     uint32_t    u_qsav[6];      /* Label variable for quits and interrupts */
     uint32_t    u_ssav[6];      /* Label variable for swapping */
     uint32_t    u_signal[NSIG]; /* Disposition of signals */
+    uint32_t    u_sigrest[NSIG];/* Signal restorer/trampoline */
 
     /* Timing */
     uint32_t    u_utime;        /* This process user time */
@@ -85,7 +87,7 @@ struct user {
 
     /* Kernel stack grows down from end of user structure */
     /* Stack space sized so sizeof(struct user) == USIZE_BYTES */
-    uint8_t     u_stack[3571];
+    uint8_t     u_stack[3468];
 };
 
 /* Ensure the u-area occupies exactly USIZE_BYTES */

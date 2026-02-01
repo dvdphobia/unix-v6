@@ -374,10 +374,28 @@ static void rd_mkfs(void) {
         ip->i_nlink = 1;
         ip->i_size0 = (uint8_t)((rf->size >> 16) & 0xFF);
         ip->i_size1 = (uint16_t)(rf->size & 0xFFFF);
+        for (j = 0; j < 8; j++) {
+            ip->i_addr[j] = 0;
+        }
 
-        for (j = 0; j < blocks && j < 8; j++) {
-            ip->i_addr[j] = data_block++;
-            rd_write_block(ip->i_addr[j], rf->data + (j * BSIZE), rf->size - (j * BSIZE));
+        if (blocks <= 8) {
+            for (j = 0; j < blocks; j++) {
+                ip->i_addr[j] = data_block++;
+                rd_write_block(ip->i_addr[j], rf->data + (j * BSIZE), rf->size - (j * BSIZE));
+            }
+        } else {
+            uint32_t indir[NINDIR];
+            int max_blocks = (blocks > NINDIR) ? NINDIR : blocks;
+            ip->i_mode |= ILARG;
+            for (j = 0; j < NINDIR; j++) {
+                indir[j] = 0;
+            }
+            ip->i_addr[0] = data_block++;
+            for (j = 0; j < max_blocks; j++) {
+                indir[j] = data_block++;
+                rd_write_block(indir[j], rf->data + (j * BSIZE), rf->size - (j * BSIZE));
+            }
+            rd_write_block(ip->i_addr[0], (const uint8_t *)indir, sizeof(indir));
         }
 
         rd_name_from_path(rf->path, name);

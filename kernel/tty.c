@@ -53,6 +53,17 @@ static void vga_putc(int c);
 /* Console TTY structure */
 struct tty cons_tty;
 
+int tty_get_pgid(void) {
+    if (cons_tty.t_pgid) {
+        return cons_tty.t_pgid;
+    }
+    return u.u_procp ? u.u_procp->p_pgrp : 0;
+}
+
+void tty_set_pgid(int pgid) {
+    cons_tty.t_pgid = (int16_t)pgid;
+}
+
 /* Input mapping table for upper-case terminals */
 static char maptab[128] = {
     0,0,0,0,004,0,0,0,
@@ -107,6 +118,7 @@ void cinit(void) {
     cons_tty.t_erase = '\b';     /* Backspace */
     cons_tty.t_kill = '@';       /* Kill character */
     cons_tty.t_flags = ECHO | CRMOD;
+    cons_tty.t_pgid = 0;
     cons_tty.t_rawq.c_cc = 0;
     cons_tty.t_rawq.c_cf = NULL;
     cons_tty.t_rawq.c_cl = NULL;

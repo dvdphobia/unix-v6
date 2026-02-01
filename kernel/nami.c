@@ -253,6 +253,16 @@ eloop:
         if (access(dp, IWRITE)) {
             goto out;
         }
+        /* Return inode being deleted; keep parent in u.u_pdir */
+        u.u_pdir = dp;
+        dev_t dev = dp->i_dev;
+        ino_t ino = u.u_dent.u_ino;
+        dp = iget(dev, ino);
+        if (dp == NULL) {
+            iput(u.u_pdir);
+            u.u_pdir = NULL;
+            return NULL;
+        }
         return dp;
     }
     

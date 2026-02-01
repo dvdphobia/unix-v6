@@ -28,6 +28,8 @@ struct file {
 #define FREAD       01          /* File open for reading */
 #define FWRITE      02          /* File open for writing */
 #define FPIPE       04          /* File is a pipe */
+#define FAPPEND     010         /* Append on each write */
+#define FNONBLOCK   020         /* Non-blocking I/O */
 
 /* Global file table */
 extern struct file file[NFILE];

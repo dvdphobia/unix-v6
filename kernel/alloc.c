@@ -255,6 +255,9 @@ loop:
             for (j = 0; j < 8; j++) {
                 ip->i_addr[j] = 0;
             }
+            ip->i_atime = time[1];
+            ip->i_mtime = time[1];
+            ip->i_ctime = time[1];
             fp->s_fmod = 1;
             return ip;
         }
