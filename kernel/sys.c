@@ -1520,8 +1520,6 @@ int exec(void) {
     int kpi = 0;
     extern int schar(void);
     
-    /* debug log removed */
-    
     u.u_dirp = (caddr_t)u.u_arg[0];
     while (kpi < (int)sizeof(kpath) - 1) {
         c = fubyte(u.u_dirp++);
@@ -1631,8 +1629,8 @@ int exec(void) {
         goto bad;
     }
     
-    ts = ((header[1] + 63) >> 6) & 01777;
-    ds = ((header[2] + header[3] + 63) >> 6) & 01777;
+    ts = (header[1] + 63) >> 6;
+    ds = (header[2] + header[3] + 63) >> 6;
     
     if (estabur(ts, ds, SSIZE, sep))
         goto bad;
@@ -1667,7 +1665,7 @@ int exec(void) {
     cp = bp->b_addr;
     {
         uint32_t stack_top = (ds + SSIZE) * 64;
-        uint32_t needed = nc + na * 4 + 8; /* argc + argv + NULL */
+        uint32_t needed = nc + na * 4 + 20; /* argc + argv + NULL + envp NULL + auxv */
         uint32_t argp;
         uint32_t strp;
 
@@ -1677,6 +1675,7 @@ int exec(void) {
         }
 
         ap = stack_top - needed;
+        ap &= ~0xFu;
         new_sp = ap;
         u.u_ar0[UESP] = ap;
         u.u_ar0[EIP] = 0;
@@ -1686,7 +1685,7 @@ int exec(void) {
             goto bad;
         }
         argp = ap + 4;
-        strp = ap + 4 + na * 4 + 4;
+        strp = ap + 4 + na * 4 + 16;
 
         while (na--) {
             if (suword((caddr_t)argp, (int)strp) < 0) {
@@ -1701,6 +1700,24 @@ int exec(void) {
                 }
             } while (*cp++);
         }
+        /* argv NULL */
+        if (suword((caddr_t)argp, 0) < 0) {
+            u.u_error = EFAULT;
+            goto bad;
+        }
+        argp += 4;
+        /* envp NULL */
+        if (suword((caddr_t)argp, 0) < 0) {
+            u.u_error = EFAULT;
+            goto bad;
+        }
+        argp += 4;
+        /* auxv AT_NULL */
+        if (suword((caddr_t)argp, 0) < 0) {
+            u.u_error = EFAULT;
+            goto bad;
+        }
+        argp += 4;
         if (suword((caddr_t)argp, 0) < 0) {
             u.u_error = EFAULT;
             goto bad;
@@ -1745,6 +1762,18 @@ int exec(void) {
     u.u_ar0[UESP] = new_sp;
     u.u_ar0[EIP] = 0;
     u.u_ar0[EAX] = 0;  /* Exec returns 0 on success */
+    /* Ensure correct segment selectors for user mode */
+    u.u_ar0[CS] = USER_CS;   /* 0x1B - user code segment with RPL=3 */
+    u.u_ar0[USS] = USER_DS;  /* 0x23 - user data/stack segment with RPL=3 */
+    u.u_ar0[DS] = USER_DS;
+    u.u_ar0[ES] = USER_DS;
+    u.u_ar0[FS] = USER_DS;
+    u.u_ar0[GS] = USER_DS;
+    u.u_ar0[EFLAGS] |= EFLAGS_IF;  /* Ensure interrupts are enabled */
+    
+    /* Clear trace flag to avoid unnecessary debugging */
+    u.u_ar0[EFLAGS] &= ~(1 << 8);
+    
     return 0;
 
 bad:
@@ -3310,6 +3339,293 @@ int sys_mprotect(void) {
 }
 
 /*
+ * sys_futex_time64 - Stub for musl futex calls
+ */
+int sys_futex_time64(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+/*
+ * sys_rt_sigqueueinfo - Stub for musl AIO signal notifications
+ */
+int sys_rt_sigqueueinfo(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+/*
+ * sys_sched_getaffinity - Stub for musl sysconf
+ */
+int sys_sched_getaffinity(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+/*
+ * System V IPC message queue stubs for musl build
+ */
+int sys_msgget(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_msgctl(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_msgsnd(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_msgrcv(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_semget(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_semctl(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_semop(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_capget(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_capset(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_chroot(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_clock_adjtime64(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_shmget(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_shmctl(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_shmat(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_shmdt(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_copy_file_range(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_epoll_create1(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_epoll_ctl(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_epoll_pwait(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_getdents(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_getitimer(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_rt_sigprocmask(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_set_tid_address(void) {
+    u.u_ar0[EAX] = 0;
+    return 0;
+}
+
+int sys_eventfd2(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_flock(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_fanotify_init(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_fanotify_mark(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_fallocate(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_rt_sigaction(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_tkill(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_exit_group(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_fadvise(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_openat(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_getrandom(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_inotify_init1(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_inotify_add_watch(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_inotify_rm_watch(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_getpriority(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_getresgid(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_setitimer(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_waitid(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_syslog(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_memfd_create(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_mlock2(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_membarrier(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_init_module(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_delete_module(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_mount2(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_umount2(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_name_to_handle_at(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_open_by_handle_at(void) {
+    u.u_error = ENOSYS;
+    return -1;
+}
+
+int sys_ok(void) {
+    u.u_ar0[EAX] = 0;
+    return 0;
+}
+
+/*
  * sys_getrlimit - Get resource limits (syscall #91)
  */
 int sys_getrlimit(void) {
@@ -3659,4 +3975,9 @@ int sys_sigreturn(void) {
     u.u_ar0[ESP_SAVE] = sp + 12;
     u.u_ar0[EAX] = 0;
     return 0;
+}
+
+int sys_enosys(void) {
+    u.u_error = ENOSYS;
+    return -1;
 }

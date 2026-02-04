@@ -1,4 +1,5 @@
 #include "syscalls.h"
+#include <stdlib.h>
 
 #define BUF_SIZE 128
 #define MAX_ARGS 8
@@ -77,7 +78,7 @@ int main(int argc, char **argv) {
         if (pid == 0) {
             char path[64];
             if (args[0][0] == '/') {
-                exec(args[0], args);
+                execv(args[0], args);
             } else {
                 int i = 0;
                 const char *prefix = "/bin/";
@@ -90,10 +91,10 @@ int main(int argc, char **argv) {
                     path[i++] = args[0][j++];
                 }
                 path[i] = '\0';
-                exec(path, args);
+                execv(path, args);
             }
             write(1, "command not found\n", 18);
-            exit(1);
+            _exit(1);
         }
 
         wait(0);

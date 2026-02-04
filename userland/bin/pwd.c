@@ -2,6 +2,8 @@
 
 #include <stddef.h>
 #include "../syscalls.h"
+#include "../libc/fcntl.h"
+#include "../libc/unistd.h"
 
 int main(void) {
     char buf[256];

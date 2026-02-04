@@ -29,6 +29,12 @@ extern int8_t curpri;
 /* SPL functions from x86.S */
 extern int spl0(void);
 extern int spl6(void);
+
+/* Memory segment operations from x86.S */
+extern void copyseg(uint32_t from, uint32_t to);
+extern void clearseg(uint32_t seg);
+extern int savu_switch(uint32_t *rsav, void *old_dest, void *new_src, uint32_t count);
+extern int spl6(void);
 extern void splx(int);
 
 /* Context switch functions from x86.S */
@@ -42,7 +48,10 @@ extern uint64_t gdt[];
 
 /* Update GDT user segments for process base address */
 void update_pos(struct proc *p) {
-    /* Offset by USIZE (u-area) so virtual 0 starts after it */
+    /* Offset by USIZE (u-area) so virtual 0 starts after it.
+     * This uses x86 segmentation to provide process isolation.
+     * Virtual address 0 maps to physical (p->p_addr + USIZE) * 64.
+     */
     uint32_t base = (p->p_addr + USIZE) * 64;
     uint32_t limit = 0xFFFFF; /* 4GB limit in 4KB units */
     
@@ -53,7 +62,7 @@ void update_pos(struct proc *p) {
      
     /* Construct descriptors */
     /* Code: Type=0xA (Exe/Read), S=1, DPL=3, P=1, D=1, G=1 */
-    uint32_t low = (limit & 0xFFFF) | (base << 16);
+    uint32_t low = (limit & 0xFFFF) | ((base & 0xFFFF) << 16);
     uint32_t high = (base & 0xFF000000) |       /* Base[31:24] */
                     (0xC << 20) |               /* G=1, D=1 */
                     (limit & 0xF0000) |

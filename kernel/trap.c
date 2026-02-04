@@ -20,6 +20,7 @@ extern int8_t runrun;
 extern void printf(const char *fmt, ...);
 extern int issig(void);
 extern void psig(void);
+extern int fuword(caddr_t addr);
 
 /*
  * System call table entry
@@ -75,13 +76,9 @@ void trap(uint32_t *frame) {
     uint32_t eip;
     uint32_t *prev_ar0 = u.u_ar0;
     
-    /* Debug print for ALL traps */
+    /* Debug print for traps: avoid IRQ/0x80 spam */
     trapno = frame[TRAPNO];
-    /* if (trapno == 0x80) {
-        printf("SYSCALL: %d from EIP=%x\n", frame[EAX], frame[EIP]);
-    } else */ if (trapno >= 32 && trapno < 48) {
-        /* Hardware IRQs - ignore to avoid console spam */
-    } else if (trapno != 0x80) {
+    if (trapno != 0x80 && !(trapno >= 32 && trapno < 48)) {
         printf("TRAP: %d EIP=%x CS=%x\n", trapno, frame[EIP], frame[CS]);
     }
     uint32_t cs;
@@ -217,9 +214,31 @@ void trap(uint32_t *frame) {
      */
     case 13:
         if (from_user) {
+            /* Analyze error code */
+            uint32_t err_code = err;
+            uint8_t ext = (err_code >> 0) & 1;
+            uint8_t idt = (err_code >> 1) & 1;
+            uint8_t ti = (err_code >> 2) & 1;
+            uint16_t idx = (err_code >> 3) & 0x1FFF;
+            
+            printf("GPF: Error code=%x (Ext=%d IDT=%d TI=%d Index=%d)\n", 
+                   err_code, ext, idt, ti, idx);
+            printf("     EIP=%08x CS=%04x EFLAGS=%08x\n", eip, cs, eflags);
+            printf("     ESP=%08x EAX=%08x EBX=%08x ECX=%08x\n",
+                   frame[UESP], frame[EAX], frame[EBX], frame[ECX]);
+            printf("     DS=%04x ES=%04x FS=%04x GS=%04x\n",
+                   frame[DS], frame[ES], frame[FS], frame[GS]);
+            printf("     Process: pid=%d p_addr=%x p_size=%x\n",
+                   u.u_procp->p_pid, u.u_procp->p_addr, u.u_procp->p_size);
+            printf("     u_base=%x u_count=%x\n", 
+                   (uint32_t)u.u_base, (uint32_t)u.u_count);
+            
+            /* Deliver SIGSEG */
             sig = SIGSEG;
             goto signal;
         }
+        /* Kernel GPF is fatal */
+        printf("KERNEL GPF - Halting!\n");
         goto kernel_fault;
     
     /*
@@ -321,9 +340,13 @@ void trap(uint32_t *frame) {
         }
         
         if (u.u_error) {
-            /* Set carry flag to indicate error */
+            if (u.u_error == ENOSYS) {
+                printf("SYSCALL ENOSYS: nr=%d eax=%x ebx=%x ecx=%x edx=%x esi=%x edi=%x\n",
+                       i, frame[EAX], frame[EBX], frame[ECX], frame[EDX], frame[ESI], frame[EDI]);
+            }
+            /* Return -errno in EAX for Linux-style syscall ABI */
             frame[EFLAGS] |= EFLAGS_CF;
-            frame[EAX] = u.u_error;
+            frame[EAX] = (uint32_t)(-(int32_t)u.u_error);
         } else {
             /* Clear carry flag, return value in EAX */
             frame[EFLAGS] &= ~EFLAGS_CF;
@@ -350,6 +373,8 @@ void trap(uint32_t *frame) {
             extern void pic_eoi(int irq);
             pic_eoi(trapno - 32);
         } else if (from_user) {
+            printf("TRAP: %d EIP=%x CS=%x EFLAGS=%x ESP=%x EAX=%x EBX=%x ECX=%x EDX=%x\n",
+                   trapno, eip, cs, eflags, frame[UESP], frame[EAX], frame[EBX], frame[ECX], frame[EDX]);
             sig = SIGSEG;
             goto signal;
         } else {

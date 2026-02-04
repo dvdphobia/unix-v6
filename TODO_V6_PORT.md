@@ -58,7 +58,7 @@ This section maps missing POSIX pieces to the files they require, with focus on 
 
 **Users/groups**
 - [ ] `getuid`, `getgid`, `setuid`, `setgid`, group/passwd lookups
-  - Files: [kernel/sys.c](kernel/sys.c), [userland/libc](userland) (to add)
+  - Files: [kernel/sys.c](kernel/sys.c)
 
 ### Tier 3 (quality & completeness)
 - [ ] `mmap`, `munmap` (optional if `sbrk` is stable)
@@ -69,13 +69,11 @@ This section maps missing POSIX pieces to the files they require, with focus on 
 
 ## 3.2 Toolchain prerequisites (beyond POSIX)
 To run GCC natively you also need:
-- [ ] A minimal libc (string, stdio, errno, malloc, setjmp/longjmp)
-  - Files: add under [userland/libc](userland) (new)
 - [ ] Assembler + linker (binutils or LLVM toolchain)
 - [ ] Working `make` and a shell with redirection and pipes
 
-## 3.3 Recommended next step (GCC‑critical)
-Implement Tier‑1 items first, then add minimal libc stubs to satisfy GCC and libgcc builds.
+## 3.3 Recommended next step
+Implement Tier‑1 items first for full POSIX compatibility.
 
 ## 4. System Calls & Kernel Features
 Several kernel subsystems are simplified.

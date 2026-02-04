@@ -1,4 +1,6 @@
 #include "../syscalls.h"
+#include "../libc/fcntl.h"
+#include "../libc/unistd.h"
 
 static int str_len(const char *s) {
     int n = 0;

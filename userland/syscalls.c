@@ -10,13 +10,18 @@
 #define SYS_OPEN    5
 #define SYS_CLOSE   6
 #define SYS_WAIT    7
+#define SYS_CREAT   8
+#define SYS_LSEEK   19
 #define SYS_EXEC    11
 #define SYS_CHDIR   12
 #define SYS_GETPID  20
+#define SYS_GETPPID 21
 #define SYS_SETUID  23
 #define SYS_GETUID  24
 #define SYS_SETGID  46
+#define SYS_KILL    37
 #define SYS_GETGID  47
+#define SYS_GETPGRP 48
 #define SYS_GETCWD  49
 #define SYS_EXIT2   50
 #define SYS_TRUNCATE  51
@@ -172,6 +177,15 @@ int fork(void) {
 
 int exec(const char *filename, char *const argv[]) {
     return (int)syscall2(SYS_EXEC, (long)filename, (long)argv);
+}
+
+int execv(const char *filename, char *const argv[]) {
+    return exec(filename, argv);
+}
+
+int execve(const char *filename, char *const argv[], char *const envp[]) {
+    (void)envp; /* Ignore environment for now */
+    return exec(filename, argv);
 }
 
 void exit(int status) {
@@ -530,4 +544,34 @@ int fcntl(int fd, int cmd, long arg) {
 
 int access(const char *pathname, int mode) {
     return (int)syscall2(SYS_ACCESS, (long)pathname, mode);
+}
+
+long lseek(int fd, long offset, int whence) {
+    long ret;
+    unsigned char err;
+    asm volatile ("int $0x80; setc %1"
+                  : "=a" (ret), "=q" (err)
+                  : "0" (SYS_LSEEK), "b" (fd), "c" (offset), "d" (whence)
+                  : "cc", "memory");
+    if (err) {
+        errno = (int)ret;
+        return -1;
+    }
+    return ret;
+}
+
+int creat(const char *pathname, int mode) {
+    return (int)syscall2(SYS_CREAT, (long)pathname, mode);
+}
+
+int kill(int pid, int sig) {
+    return (int)syscall2(SYS_KILL, pid, sig);
+}
+
+int getppid(void) {
+    return (int)syscall0(SYS_GETPPID);
+}
+
+int getpgrp(void) {
+    return (int)syscall0(SYS_GETPGRP);
 }

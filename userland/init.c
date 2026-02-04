@@ -1,4 +1,6 @@
 #include "syscalls.h"
+#include "libc/fcntl.h"
+#include "libc/unistd.h"
 
 static void print_motd(void) {
     int fd = open("/etc/motd", O_RDONLY);
@@ -22,9 +24,9 @@ int main() {
     while(1) {
         pid = fork();
         if (pid == 0) {
-            exec("/bin/sh", argv);
+            execv("/bin/sh", argv);
             write(1, "exec failed\n", 13);
-            exit(1);
+            _exit(1);
         }
         while(wait(0) != -1);
     }

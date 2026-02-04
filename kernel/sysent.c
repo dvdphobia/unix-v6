@@ -58,6 +58,7 @@ int getgid(void);
 int ssig(void);
 int getcwd(void);
 int sys_exit(void);
+int sys_enosys(void);
 int truncate(void);
 int ftruncate(void);
 int fsync(void);
@@ -113,6 +114,61 @@ int sys_sigpending(void);
 int sys_sigreturn(void);
 int sys_mprotect(void);
 int sys_waitpid(void);
+int sys_futex_time64(void);
+int sys_rt_sigqueueinfo(void);
+int sys_sched_getaffinity(void);
+int sys_msgget(void);
+int sys_msgctl(void);
+int sys_msgsnd(void);
+int sys_msgrcv(void);
+int sys_semget(void);
+int sys_semctl(void);
+int sys_semop(void);
+int sys_capget(void);
+int sys_capset(void);
+int sys_chroot(void);
+int sys_clock_adjtime64(void);
+int sys_shmget(void);
+int sys_shmctl(void);
+int sys_shmat(void);
+int sys_shmdt(void);
+int sys_copy_file_range(void);
+int sys_epoll_create1(void);
+int sys_epoll_ctl(void);
+int sys_epoll_pwait(void);
+int sys_getdents(void);
+int sys_getitimer(void);
+int sys_rt_sigprocmask(void);
+int sys_set_tid_address(void);
+int sys_eventfd2(void);
+int sys_flock(void);
+int sys_fanotify_init(void);
+int sys_fanotify_mark(void);
+int sys_fallocate(void);
+int sys_rt_sigaction(void);
+int sys_tkill(void);
+int sys_exit_group(void);
+int sys_fadvise(void);
+int sys_openat(void);
+int sys_getrandom(void);
+int sys_inotify_init1(void);
+int sys_inotify_add_watch(void);
+int sys_inotify_rm_watch(void);
+int sys_getpriority(void);
+int sys_getresgid(void);
+int sys_setitimer(void);
+int sys_waitid(void);
+int sys_syslog(void);
+int sys_memfd_create(void);
+int sys_mlock2(void);
+int sys_membarrier(void);
+int sys_init_module(void);
+int sys_delete_module(void);
+int sys_mount2(void);
+int sys_umount2(void);
+int sys_name_to_handle_at(void);
+int sys_open_by_handle_at(void);
+int sys_ok(void);
 
 /*
  * System call entry table
@@ -232,6 +288,317 @@ struct sysent sysent[] = {
     { 1, sys_sigpending },  /* 103 = sigpending */
     { 0, sys_sigreturn },   /* 104 = sigreturn */
     { 3, sys_mprotect },    /* 105 = mprotect */
+    { 6, sys_futex_time64 },/* 106 = futex_time64 (stub) */
+    { 3, sys_rt_sigqueueinfo }, /* 107 = rt_sigqueueinfo (stub) */
+    { 3, sys_sched_getaffinity }, /* 108 = sched_getaffinity (stub) */
+    { 2, sys_msgget },     /* 109 = msgget (stub) */
+    { 3, sys_msgctl },     /* 110 = msgctl (stub) */
+    { 4, sys_msgsnd },     /* 111 = msgsnd (stub) */
+    { 5, sys_msgrcv },     /* 112 = msgrcv (stub) */
+    { 3, sys_semget },     /* 113 = semget (stub) */
+    { 3, sys_semctl },     /* 114 = semctl (stub) */
+    { 3, sys_semop },      /* 115 = semop (stub) */
+    { 2, sys_capget },     /* 116 = capget (stub) */
+    { 2, sys_capset },     /* 117 = capset (stub) */
+    { 1, sys_chroot },     /* 118 = chroot (stub) */
+    { 2, sys_clock_adjtime64 }, /* 119 = clock_adjtime64 (stub) */
+    { 3, sys_shmget },     /* 120 = shmget (stub) */
+    { 3, sys_shmctl },     /* 121 = shmctl (stub) */
+    { 3, sys_shmat },      /* 122 = shmat (stub) */
+    { 1, sys_ok },         /* 123 = shmdt (no-op) */
+    { 6, sys_copy_file_range }, /* 124 = copy_file_range (stub) */
+    { 1, sys_epoll_create1 },   /* 125 = epoll_create1 (stub) */
+    { 4, sys_epoll_ctl },       /* 126 = epoll_ctl (stub) */
+    { 6, sys_epoll_pwait },     /* 127 = epoll_pwait (stub) */
+    { 3, sys_getdents },        /* 128 = getdents (stub) */
+    { 2, sys_getitimer },       /* 129 = getitimer (stub) */
+    { 4, sys_rt_sigprocmask },  /* 130 = rt_sigprocmask (stub) */
+    { 1, sys_set_tid_address }, /* 131 = set_tid_address (stub) */
+    { 2, sys_eventfd2 },        /* 132 = eventfd2 (stub) */
+    { 2, sys_flock },           /* 133 = flock (stub) */
+    { 2, sys_fanotify_init },   /* 134 = fanotify_init (stub) */
+    { 6, sys_fanotify_mark },   /* 135 = fanotify_mark (stub) */
+    { 6, sys_fallocate },       /* 136 = fallocate (stub) */
+    { 4, sys_rt_sigaction },    /* 137 = rt_sigaction (stub) */
+    { 2, sys_tkill },           /* 138 = tkill (stub) */
+    { 1, sys_exit_group },      /* 139 = exit_group (stub) */
+    { 6, sys_fadvise },         /* 140 = fadvise (stub) */
+    { 4, sys_openat },          /* 141 = openat (stub) */
+    { 3, sys_getrandom },       /* 142 = getrandom (stub) */
+    { 1, sys_inotify_init1 },   /* 143 = inotify_init1 (stub) */
+    { 3, sys_inotify_add_watch }, /* 144 = inotify_add_watch (stub) */
+    { 2, sys_inotify_rm_watch }, /* 145 = inotify_rm_watch (stub) */
+    { 2, sys_getpriority },     /* 146 = getpriority (stub) */
+    { 3, sys_getresgid },       /* 147 = getresgid (stub) */
+    { 3, sys_setitimer },       /* 148 = setitimer (stub) */
+    { 5, sys_waitid },          /* 149 = waitid (stub) */
+    { 3, sys_syslog },          /* 150 = syslog (stub) */
+    { 2, sys_memfd_create },    /* 151 = memfd_create (stub) */
+    { 3, sys_mlock2 },          /* 152 = mlock2 (stub) */
+    { 2, sys_membarrier },      /* 153 = membarrier (stub) */
+    { 3, sys_init_module },     /* 154 = init_module (stub) */
+    { 2, sys_delete_module },   /* 155 = delete_module (stub) */
+    { 5, sys_mount2 },          /* 156 = mount (stub) */
+    { 2, sys_umount2 },         /* 157 = umount2 (stub) */
+    { 5, sys_name_to_handle_at }, /* 158 = name_to_handle_at (stub) */
+    { 3, sys_open_by_handle_at }, /* 159 = open_by_handle_at (stub) */
+    { 0, sys_enosys },     /* 160 = AUXV_H */
+    { 0, sys_enosys },     /* 161 = MEMBARRIER_H */
+    { 0, sys_enosys },     /* 162 = MMAN_H */
+    { 0, sys_enosys },     /* 163 = SECCOMP */
+    { 0, sys_enosys },     /* 164 = STAT_H */
+    { 0, sys_enosys },     /* 165 = SYSINFO_H */
+    { 0, sys_enosys },     /* 166 = TIME_H */
+    { 0, sys_enosys },     /* 167 = USER_DISPATCH */
+    { 0, sys_enosys },     /* 168 = _llseek */
+    { 0, sys_enosys },     /* 169 = _newselect */
+    { 0, sys_enosys },     /* 170 = accept */
+    { 0, sys_enosys },     /* 171 = accept4 */
+    { 0, sys_enosys },     /* 172 = acct */
+    { 0, sys_enosys },     /* 173 = adjtimex */
+    { 0, sys_enosys },     /* 174 = arch_prctl */
+    { 0, sys_enosys },     /* 175 = cachectl */
+    { 0, sys_enosys },     /* 176 = cacheflush */
+    { 0, sys_enosys },     /* 177 = chown32 */
+    { 0, sys_enosys },     /* 178 = clock_adjtime */
+    { 0, sys_enosys },     /* 179 = clock_getres */
+    { 0, sys_enosys },     /* 180 = clock_getres_time32 */
+    { 0, sys_enosys },     /* 181 = clock_getres_time64 */
+    { 0, sys_enosys },     /* 182 = clock_gettime */
+    { 0, sys_enosys },     /* 183 = clock_gettime32 */
+    { 0, sys_enosys },     /* 184 = clock_gettime64 */
+    { 0, sys_enosys },     /* 185 = clock_nanosleep */
+    { 0, sys_enosys },     /* 186 = clock_nanosleep_time32 */
+    { 0, sys_enosys },     /* 187 = clock_nanosleep_time64 */
+    { 0, sys_enosys },     /* 188 = clock_settime */
+    { 0, sys_enosys },     /* 189 = clock_settime32 */
+    { 0, sys_enosys },     /* 190 = clock_settime64 */
+    { 0, fork },           /* 191 = clone (mapped to fork) */
+    { 0, sys_enosys },     /* 192 = dup3 */
+    { 0, sys_enosys },     /* 193 = epoll_create */
+    { 0, sys_enosys },     /* 194 = epoll_wait */
+    { 0, sys_enosys },     /* 195 = eventfd */
+    { 0, sys_enosys },     /* 196 = execveat */
+    { 0, sys_enosys },     /* 197 = faccessat */
+    { 0, sys_enosys },     /* 198 = faccessat2 */
+    { 0, sys_enosys },     /* 199 = fadvise64 */
+    { 0, sys_enosys },     /* 200 = fadvise64_64 */
+    { 0, sys_enosys },     /* 201 = fchdir */
+    { 0, sys_enosys },     /* 202 = fchmodat */
+    { 0, sys_enosys },     /* 203 = fchmodat2 */
+    { 0, sys_enosys },     /* 204 = fchown32 */
+    { 0, sys_enosys },     /* 205 = fchownat */
+    { 0, sys_enosys },     /* 206 = fcntl64 */
+    { 0, sys_enosys },     /* 207 = fdatasync */
+    { 0, sys_enosys },     /* 208 = fgetxattr */
+    { 0, sys_enosys },     /* 209 = flistxattr */
+    { 0, sys_enosys },     /* 210 = fremovexattr */
+    { 0, sys_enosys },     /* 211 = fsetxattr */
+    { 0, sys_enosys },     /* 212 = fstat64 */
+    { 0, sys_enosys },     /* 213 = fstatat */
+    { 0, sys_enosys },     /* 214 = fstatat64 */
+    { 0, sys_enosys },     /* 215 = fstatfs */
+    { 0, sys_enosys },     /* 216 = fstatfs64 */
+    { 0, sys_enosys },     /* 217 = fsync */
+    { 0, sys_enosys },     /* 218 = ftruncate */
+    { 0, sys_enosys },     /* 219 = ftruncate64 */
+    { 0, sys_enosys },     /* 220 = futex */
+    { 0, sys_enosys },     /* 221 = futimesat */
+    { 0, sys_enosys },     /* 222 = get_robust_list */
+    { 0, sys_enosys },     /* 223 = get_thread_area */
+    { 0, sys_enosys },     /* 224 = getcpu */
+    { 0, sys_enosys },     /* 225 = getcwd */
+    { 0, sys_enosys },     /* 226 = getdents64 */
+    { 0, sys_enosys },     /* 227 = getegid */
+    { 0, sys_enosys },     /* 228 = getegid32 */
+    { 0, sys_enosys },     /* 229 = geteuid */
+    { 0, sys_enosys },     /* 230 = geteuid32 */
+    { 0, sys_enosys },     /* 231 = getgid32 */
+    { 0, sys_enosys },     /* 232 = getgroups */
+    { 0, sys_enosys },     /* 233 = getgroups32 */
+    { 0, sys_enosys },     /* 234 = getppid */
+    { 0, sys_enosys },     /* 235 = getresgid32 */
+    { 0, sys_enosys },     /* 236 = getresuid */
+    { 0, sys_enosys },     /* 237 = getresuid32 */
+    { 0, sys_enosys },     /* 238 = getrusage_time64 */
+    { 0, sys_enosys },     /* 239 = gettid */
+    { 0, sys_enosys },     /* 240 = gettimeofday_time32 */
+    { 0, sys_enosys },     /* 241 = getuid32 */
+    { 0, sys_enosys },     /* 242 = getxattr */
+    { 0, sys_ok },         /* 243 = inotify_init (no-op) */
+    { 0, sys_enosys },     /* 244 = ioperm */
+    { 0, sys_enosys },     /* 245 = iopl */
+    { 0, sys_enosys },     /* 246 = ipc */
+    { 0, sys_enosys },     /* 247 = lchown32 */
+    { 0, sys_enosys },     /* 248 = lgetxattr */
+    { 0, sys_enosys },     /* 249 = linkat */
+    { 0, sys_enosys },     /* 250 = listxattr */
+    { 0, sys_enosys },     /* 251 = llistxattr */
+    { 0, sys_enosys },     /* 252 = lremovexattr */
+    { 0, sys_enosys },     /* 253 = lsetxattr */
+    { 0, sys_enosys },     /* 254 = lstat64 */
+    { 0, sys_enosys },     /* 255 = madvise */
+    { 0, sys_enosys },     /* 256 = mincore */
+    { 0, sys_enosys },     /* 257 = mkdirat */
+    { 0, sys_enosys },     /* 258 = mknodat */
+    { 0, sys_enosys },     /* 259 = mlock */
+    { 0, sys_enosys },     /* 260 = mlockall */
+    { 0, sys_enosys },     /* 261 = mmap2 */
+    { 0, sys_enosys },     /* 262 = mq_getsetattr */
+    { 0, sys_enosys },     /* 263 = mq_notify */
+    { 0, sys_enosys },     /* 264 = mq_open */
+    { 0, sys_enosys },     /* 265 = mq_timedreceive */
+    { 0, sys_enosys },     /* 266 = mq_timedreceive_time64 */
+    { 0, sys_enosys },     /* 267 = mq_timedsend */
+    { 0, sys_enosys },     /* 268 = mq_timedsend_time64 */
+    { 0, sys_enosys },     /* 269 = mq_unlink */
+    { 0, sys_enosys },     /* 270 = mremap */
+    { 0, sys_enosys },     /* 271 = msync */
+    { 0, sys_enosys },     /* 272 = munlock */
+    { 0, sys_enosys },     /* 273 = munlockall */
+    { 0, sys_enosys },     /* 274 = newfstatat */
+    { 0, sys_enosys },     /* 275 = personality */
+    { 0, sys_enosys },     /* 276 = pipe2 */
+    { 0, sys_enosys },     /* 277 = pivot_root */
+    { 0, sys_enosys },     /* 278 = ppoll */
+    { 0, sys_enosys },     /* 279 = ppoll_time64 */
+    { 0, sys_enosys },     /* 280 = prctl */
+    { 0, sys_enosys },     /* 281 = pread */
+    { 0, sys_enosys },     /* 282 = pread64 */
+    { 0, sys_enosys },     /* 283 = preadv */
+    { 0, sys_enosys },     /* 284 = preadv2 */
+    { 0, sys_enosys },     /* 285 = prlimit64 */
+    { 0, sys_enosys },     /* 286 = process_vm_readv */
+    { 0, sys_enosys },     /* 287 = process_vm_writev */
+    { 0, sys_enosys },     /* 288 = pselect6 */
+    { 0, sys_enosys },     /* 289 = pselect6_time64 */
+    { 0, sys_enosys },     /* 290 = pwrite */
+    { 0, sys_enosys },     /* 291 = pwrite64 */
+    { 0, sys_enosys },     /* 292 = pwritev */
+    { 0, sys_enosys },     /* 293 = pwritev2 */
+    { 0, sys_enosys },     /* 294 = quotactl */
+    { 0, sys_enosys },     /* 295 = readahead */
+    { 0, sys_enosys },     /* 296 = readlink */
+    { 0, sys_enosys },     /* 297 = readlinkat */
+    { 0, sys_enosys },     /* 298 = readv */
+    { 0, sys_enosys },     /* 299 = reboot */
+    { 0, sys_enosys },     /* 300 = recvmmsg */
+    { 0, sys_enosys },     /* 301 = recvmmsg_time64 */
+    { 0, sys_enosys },     /* 302 = remap_file_pages */
+    { 0, sys_enosys },     /* 303 = removexattr */
+    { 0, sys_enosys },     /* 304 = renameat */
+    { 0, sys_enosys },     /* 305 = renameat2 */
+    { 0, sys_enosys },     /* 306 = riscv_flush_icache */
+    { 0, sys_enosys },     /* 307 = rt_sigpending */
+    { 0, sys_enosys },     /* 308 = rt_sigsuspend */
+    { 0, sys_enosys },     /* 309 = rt_sigtimedwait */
+    { 0, sys_enosys },     /* 310 = rt_sigtimedwait_time64 */
+    { 0, sys_enosys },     /* 311 = sched_get_priority_max */
+    { 0, sys_enosys },     /* 312 = sched_get_priority_min */
+    { 0, sys_enosys },     /* 313 = sched_getparam */
+    { 0, sys_enosys },     /* 314 = sched_getscheduler */
+    { 0, sys_enosys },     /* 315 = sched_rr_get_interval */
+    { 0, sys_enosys },     /* 316 = sched_rr_get_interval_time64 */
+    { 0, sys_enosys },     /* 317 = sched_setaffinity */
+    { 0, sys_enosys },     /* 318 = sched_setparam */
+    { 0, sys_enosys },     /* 319 = sched_setscheduler */
+    { 0, sys_enosys },     /* 320 = sched_yield */
+    { 0, sys_enosys },     /* 321 = semtimedop */
+    { 0, sys_enosys },     /* 322 = semtimedop_time64 */
+    { 0, sys_enosys },     /* 323 = sendfile */
+    { 0, sys_enosys },     /* 324 = sendfile64 */
+    { 0, sys_enosys },     /* 325 = sendmmsg */
+    { 0, sys_enosys },     /* 326 = set_robust_list */
+    { 0, sys_enosys },     /* 327 = set_thread_area */
+    { 0, sys_enosys },     /* 328 = setdomainname */
+    { 0, sys_enosys },     /* 329 = setfsgid */
+    { 0, sys_enosys },     /* 330 = setfsgid32 */
+    { 0, sys_enosys },     /* 331 = setfsuid */
+    { 0, sys_enosys },     /* 332 = setfsuid32 */
+    { 0, sys_enosys },     /* 333 = setgid32 */
+    { 0, sys_enosys },     /* 334 = setgroups */
+    { 0, sys_enosys },     /* 335 = setgroups32 */
+    { 0, sys_enosys },     /* 336 = sethostname */
+    { 0, sys_enosys },     /* 337 = setns */
+    { 0, sys_enosys },     /* 338 = setpriority */
+    { 0, sys_enosys },     /* 339 = setregid */
+    { 0, sys_enosys },     /* 340 = setregid32 */
+    { 0, sys_enosys },     /* 341 = setresgid */
+    { 0, sys_enosys },     /* 342 = setresgid32 */
+    { 0, sys_enosys },     /* 343 = setresuid */
+    { 0, sys_enosys },     /* 344 = setresuid32 */
+    { 0, sys_enosys },     /* 345 = setreuid */
+    { 0, sys_enosys },     /* 346 = setreuid32 */
+    { 0, sys_enosys },     /* 347 = settimeofday */
+    { 0, sys_enosys },     /* 348 = settimeofday_time32 */
+    { 0, sys_enosys },     /* 349 = setuid32 */
+    { 0, sys_enosys },     /* 350 = setxattr */
+    { 0, sys_enosys },     /* 351 = sigaltstack */
+    { 0, sys_enosys },     /* 352 = signalfd */
+    { 0, sys_enosys },     /* 353 = signalfd4 */
+    { 0, sys_enosys },     /* 354 = socketcall */
+    { 0, sys_enosys },     /* 355 = splice */
+    { 0, sys_enosys },     /* 356 = stat64 */
+    { 0, sys_enosys },     /* 357 = statfs */
+    { 0, sys_enosys },     /* 358 = statfs64 */
+    { 0, sys_enosys },     /* 359 = statx */
+    { 0, sys_enosys },     /* 360 = swapoff */
+    { 0, sys_enosys },     /* 361 = swapon */
+    { 0, sys_enosys },     /* 362 = symlink */
+    { 0, sys_enosys },     /* 363 = symlinkat */
+    { 0, sys_enosys },     /* 364 = sync_file_range */
+    { 0, sys_enosys },     /* 365 = sync_file_range2 */
+    { 0, sys_enosys },     /* 366 = syncfs */
+    { 0, sys_enosys },     /* 367 = sysinfo */
+    { 0, sys_enosys },     /* 368 = tee */
+    { 0, sys_enosys },     /* 369 = timer_create */
+    { 0, sys_enosys },     /* 370 = timer_delete */
+    { 0, sys_enosys },     /* 371 = timer_getoverrun */
+    { 0, sys_enosys },     /* 372 = timer_gettime */
+    { 0, sys_enosys },     /* 373 = timer_gettime32 */
+    { 0, sys_enosys },     /* 374 = timer_gettime64 */
+    { 0, sys_enosys },     /* 375 = timer_settime */
+    { 0, sys_enosys },     /* 376 = timer_settime32 */
+    { 0, sys_enosys },     /* 377 = timer_settime64 */
+    { 0, sys_enosys },     /* 378 = timerfd_create */
+    { 0, sys_enosys },     /* 379 = timerfd_gettime */
+    { 0, sys_enosys },     /* 380 = timerfd_gettime32 */
+    { 0, sys_enosys },     /* 381 = timerfd_gettime64 */
+    { 0, sys_enosys },     /* 382 = timerfd_settime */
+    { 0, sys_enosys },     /* 383 = timerfd_settime32 */
+    { 0, sys_enosys },     /* 384 = timerfd_settime64 */
+    { 0, sys_enosys },     /* 385 = truncate */
+    { 0, sys_enosys },     /* 386 = truncate64 */
+    { 0, sys_enosys },     /* 387 = ugetrlimit */
+    { 0, sys_enosys },     /* 388 = umask */
+    { 0, sys_enosys },     /* 389 = uname */
+    { 0, sys_enosys },     /* 390 = unlinkat */
+    { 0, sys_enosys },     /* 391 = unshare */
+    { 0, sys_enosys },     /* 392 = utimensat */
+    { 0, sys_enosys },     /* 393 = utimensat_time64 */
+    { 0, sys_enosys },     /* 394 = vhangup */
+    { 0, sys_enosys },     /* 395 = vmsplice */
+    { 0, sys_enosys },     /* 396 = wait4 */
+    { 0, sys_enosys },     /* 397 = wait4_time64 */
+    { 0, sys_enosys },     /* 398 = writev */
+    { 0, sys_enosys },     /* 399 = socketcall */
+    { 0, sys_enosys },     /* 400 = socket */
+    { 0, sys_enosys },     /* 401 = bind */
+    { 0, sys_enosys },     /* 402 = connect */
+    { 0, sys_enosys },     /* 403 = listen */
+    { 0, sys_enosys },     /* 404 = accept */
+    { 0, sys_enosys },     /* 405 = getsockname */
+    { 0, sys_enosys },     /* 406 = getpeername */
+    { 0, sys_enosys },     /* 407 = socketpair */
+    { 0, sys_enosys },     /* 408 = send */
+    { 0, sys_enosys },     /* 409 = recv */
+    { 0, sys_enosys },     /* 410 = sendto */
+    { 0, sys_enosys },     /* 411 = recvfrom */
+    { 0, sys_enosys },     /* 412 = shutdown */
+    { 0, sys_enosys },     /* 413 = setsockopt */
+    { 0, sys_enosys },     /* 414 = getsockopt */
+    { 0, sys_enosys },     /* 415 = sendmsg */
+    { 0, sys_enosys },     /* 416 = recvmsg */
 };
 
 /* Number of system calls */

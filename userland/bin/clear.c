@@ -1,6 +1,8 @@
 /* clear.c - Clear terminal screen */
 
 #include "../syscalls.h"
+#include "../libc/fcntl.h"
+#include "../libc/unistd.h"
 
 int main(void) {
     /* ANSI escape sequence to clear screen */

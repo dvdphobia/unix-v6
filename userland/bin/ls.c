@@ -1,4 +1,6 @@
 #include "../syscalls.h"
+#include "../libc/fcntl.h"
+#include "../libc/unistd.h"
 
 struct v6_direct {
     unsigned short d_ino;

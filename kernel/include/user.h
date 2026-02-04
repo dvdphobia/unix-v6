@@ -131,5 +131,6 @@ extern struct user u;
 #define EROFS       30          /* Read-only file system */
 #define EMLINK      31          /* Too many links */
 #define EPIPE       32          /* Broken pipe */
+#define ENOSYS      38          /* Function not implemented */
 
 #endif /* _USER_H_ */

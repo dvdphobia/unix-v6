@@ -85,6 +85,35 @@ The userland shell supports:
 | `clear` | Clear screen |
 | `help` | Show help |
 
+## Troubleshooting
+
+### TinyCC GPF Error
+
+If `tcc --help` crashes with `TRAP: 13` (General Protection Fault):
+
+**Quick Fix:**
+```bash
+# Rebuild TinyCC with updated flags
+bash scripts/build_tinycc.sh
+cd kernel && make iso
+```
+
+**Documentation:**
+- [TINYCC_QUICKFIX.md](TINYCC_QUICKFIX.md) - Quick fix guide
+- [TINYCC_FIX.md](TINYCC_FIX.md) - Comprehensive technical explanation
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - General troubleshooting
+
+**Diagnostic Tool:**
+```bash
+bash check_tinycc.sh
+```
+
+### Other Issues
+
+- **Build failures:** See [BUILD_AND_TEST_GUIDE.md](BUILD_AND_TEST_GUIDE.md)
+- **Kernel errors:** See [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+- **General Protection Faults:** See [GPF_FIX_SUMMARY.md](GPF_FIX_SUMMARY.md)
+
 ## Historical References
 
 - [Commentary on the Sixth Edition UNIX Operating System](http://www.lemis.com/grog/Documentation/Lions/) (Lions' Book)

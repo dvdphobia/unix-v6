@@ -1,6 +1,8 @@
 /* help.c - Display available commands */
 
 #include "../syscalls.h"
+#include "../libc/fcntl.h"
+#include "../libc/unistd.h"
 
 int strlen(const char *s) {
     int n;
