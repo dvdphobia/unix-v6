@@ -23,7 +23,7 @@ LIBC_LIBS     = $(LIBC)
 # Programs
 PROGS         = init sh ls cat echo pwd hello netdemo ps uname clear help pwd_test tcc
 
-BIN_SRCS      = $(addprefix bin/,ls.c cat.c echo.c pwd.c hello.c netdemo.c ps.c uname.c clear.c help.c pwd_test.c tcc.c)
+BIN_SRCS      = $(addprefix Utilities/,ls.c cat.c echo.c pwd.c hello.c netdemo.c ps.c uname.c clear.c help.c pwd_test.c tcc.c)
 
 OBJS          = \
                 $(BUILD_DIR)/syscalls.o \
@@ -42,9 +42,13 @@ OBJS          = \
                 $(BUILD_DIR)/pwd_test.o \
                 $(BUILD_DIR)/tcc.o
 
-.PHONY: all clean libc crt
+.PHONY: all clean libc crt applications
 
-all: crt libc $(addprefix $(BUILD_DIR)/,$(addsuffix .bin,$(PROGS)))
+all: crt libc applications $(addprefix $(BUILD_DIR)/,$(addsuffix .bin,$(PROGS)))
+
+# Build applications
+applications:
+	@$(MAKE) -C Applications
 
 # Build C runtime objects from libc/crt/
 crt: $(CRT_START) $(CRT_END)
@@ -97,50 +101,50 @@ $(BUILD_DIR)/sh.o: sh.c syscalls.h | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/ls.o: bin/ls.c syscalls.h | $(BUILD_DIR)
+$(BUILD_DIR)/ls.o: Utilities/ls.c syscalls.h | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/cat.o: bin/cat.c syscalls.h | $(BUILD_DIR)
+$(BUILD_DIR)/cat.o: Utilities/cat.c syscalls.h | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/echo.o: bin/echo.c syscalls.h | $(BUILD_DIR)
+$(BUILD_DIR)/echo.o: Utilities/echo.c syscalls.h | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/pwd.o: bin/pwd.c syscalls.h | $(BUILD_DIR)
+$(BUILD_DIR)/pwd.o: Utilities/pwd.c syscalls.h | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/hello.o: bin/hello.c syscalls.h | $(BUILD_DIR)
+$(BUILD_DIR)/hello.o: Utilities/hello.c syscalls.h | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/netdemo.o: bin/netdemo.c syscalls.h | $(BUILD_DIR)
+$(BUILD_DIR)/netdemo.o: Utilities/netdemo.c syscalls.h | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/ps.o: bin/ps.c syscalls.h | $(BUILD_DIR)
+$(BUILD_DIR)/ps.o: Utilities/ps.c syscalls.h | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/uname.o: bin/uname.c syscalls.h | $(BUILD_DIR)
+$(BUILD_DIR)/uname.o: Utilities/uname.c syscalls.h | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
-$(BUILD_DIR)/clear.o: bin/clear.c syscalls.h | $(BUILD_DIR)
-	@echo "CC  $<"
-	@$(CC) $(CFLAGS) -c -o $@ $<
-
-$(BUILD_DIR)/help.o: bin/help.c syscalls.h | $(BUILD_DIR)
+$(BUILD_DIR)/clear.o: Utilities/clear.c syscalls.h | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/pwd_test.o: bin/pwd_test.c syscalls.h | $(BUILD_DIR)
+$(BUILD_DIR)/help.o: Utilities/help.c syscalls.h | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/tcc.o: bin/tcc.c syscalls.h | $(BUILD_DIR)
+$(BUILD_DIR)/pwd_test.o: Utilities/pwd_test.c syscalls.h | $(BUILD_DIR)
+	@echo "CC  $<"
+	@$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/tcc.o: Utilities/tcc.c syscalls.h | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
@@ -160,6 +164,7 @@ $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf
 	@$(OBJCOPY) -O binary $< $@
 
 clean:
+	@$(MAKE) -C Applications clean
 	@$(MAKE) -C $(LIBC_DIR) clean
 	@rm -rf $(BUILD_DIR)
 	@echo "Userspace clean complete."
