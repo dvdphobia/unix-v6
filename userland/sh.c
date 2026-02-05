@@ -1,5 +1,5 @@
-#include "syscalls.h"
 #include <stdlib.h>
+#include <unistd.h>
 
 #define BUF_SIZE 128
 #define MAX_ARGS 8

@@ -1,6 +1,5 @@
-#include "syscalls.h"
-#include "libc/fcntl.h"
-#include "libc/unistd.h"
+#include <fcntl.h>
+#include <unistd.h>
 
 static void print_motd(void) {
     int fd = open("/etc/motd", O_RDONLY);

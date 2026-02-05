@@ -5,15 +5,16 @@
  * Manages shared text (code) segments for processes
  */
 
-#include <unix/types.h>
-#include <unix/param.h>
-#include <unix/proc.h>
-#include <unix/inode.h>
-#include <unix/text.h>
+#include "include/types.h"
+#include "include/param.h"
+#include "include/proc.h"
+#include "include/inode.h"
+#include "include/text.h"
 
 extern void printf(const char *fmt, ...);
 extern void sleep(void *chan, int pri);
 extern void wakeup(void *chan);
+extern void iput(struct inode *ip);
 
 /* Text table */
 struct text text[NTEXT];

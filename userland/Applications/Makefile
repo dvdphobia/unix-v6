@@ -8,7 +8,7 @@ LD            = i686-elf-ld
 OBJCOPY       = i686-elf-objcopy
 
 CFLAGS        = -ffreestanding -O2 -nostdlib -Wall -Wextra
-CFLAGS       += -I.. -I../libc -fno-builtin -fno-stack-protector
+CFLAGS       += -I.. -I../Libraries/libc/include -fno-builtin -fno-stack-protector
 LDFLAGS       = -T ../linker.ld -nostdlib
 
 # CRT and libc from parent
@@ -27,16 +27,15 @@ TERMINAL_SRC  = Terminal/terminal.c
 all: $(addprefix $(BUILD_DIR)/,$(addsuffix .bin,$(APPS)))
 
 # Build Terminal application
-$(BUILD_DIR)/terminal.o: $(TERMINAL_SRC) ../syscalls.h | $(BUILD_DIR)
+$(BUILD_DIR)/terminal.o: $(TERMINAL_SRC) | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
 # Link each application with full CRT and libc
-$(BUILD_DIR)/%.elf: $(BUILD_DIR)/%.o $(CRT_START) $(BUILD_DIR)/syscalls.o $(LIBC) $(CRT_END) ../linker.ld
+$(BUILD_DIR)/%.elf: $(BUILD_DIR)/%.o $(CRT_START) $(LIBC) $(CRT_END) ../linker.ld
 	@echo "LD  $@"
 	@$(LD) -T ../linker.ld -nostdlib -o $@ \
 		$(CRT_START) \
-		$(BUILD_DIR)/syscalls.o \
 		$(BUILD_DIR)/$*.o \
 		$(LIBC) \
 		$(CRT_END)

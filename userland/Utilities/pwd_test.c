@@ -1,9 +1,8 @@
 /* pwd_test.c - Test getcwd syscall */
 
 #include <stddef.h>
-#include "../syscalls.h"
-#include "../libc/fcntl.h"
-#include "../libc/unistd.h"
+#include <fcntl.h>
+#include <unistd.h>
 
 int main(void) {
     char buf[256];

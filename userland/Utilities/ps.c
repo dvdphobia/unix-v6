@@ -1,8 +1,7 @@
 /* ps.c - Process status */
 
-#include "../syscalls.h"
-#include "../libc/fcntl.h"
-#include "../libc/unistd.h"
+#include <fcntl.h>
+#include <unistd.h>
 
 int main(void) {
     /* Simple stub - V6 doesn't have easy process enumeration from userland */

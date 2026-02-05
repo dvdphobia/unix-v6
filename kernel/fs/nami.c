@@ -1,52 +1,85 @@
-/* nami.c - Name to Inode Conversion
- * Unix V6 x86 Port
- * Ported from original V6 ken/nami.c
+/* nami.c - Unix V6 x86 Port Pathname Lookup
+ * Ported from original V6 ken/nami.c for PDP-11
+ * Converts pathnames to inodes
+ *
+ * Original authors: Ken Thompson, Dennis Ritchie
+ * x86 port: Unix V6 Modernization Project
  */
 
-#include <unix/types.h>
-#include <unix/param.h>
-#include <unix/inode.h>
-#include <unix/buf.h>
-#include <unix/user.h>
+#include "include/types.h"
+#include "include/param.h"
+#include "include/user.h"
+#include "include/systm.h"
+#include "include/inode.h"
+#include "include/buf.h"
+#include "include/filsys.h"
 
-extern struct inode *iget(int dev, int ino);
-extern void iput(struct inode *ip);
-extern void readi(struct inode *ip);
-extern struct buf *bread(int dev, int blkno);
-extern void brelse(struct buf *bp);
-
+/* External declarations */
 extern struct user u;
-
-/* Directory entry structure */
-struct direct {
-    u_short d_ino;
-    char d_name[DIRSIZ];
-};
+extern struct inode *rootdir;
+extern void printf(const char *fmt, ...);
+extern struct inode *iget(dev_t dev, ino_t ino);
+extern void iput(struct inode *ip);
+extern int access(struct inode *ip, int mode);
+extern struct buf *bread(dev_t dev, daddr_t blkno);
+extern void brelse(struct buf *bp);
+extern daddr_t bmap(struct inode *ip, daddr_t bn, int rwflg);
+extern int fubyte(caddr_t addr);
+extern void bcopy(const void *src, void *dst, int count);
 
 /*
- * namei - Convert pathname to inode
- * 
- * func is 0 for search, 1 for create, 2 for delete
- * Returns locked inode on success, NULL on failure
+ * schar - Return the next character from a kernel string
+ */
+int schar(void) {
+    char *p = (char *)u.u_dirp;
+    u.u_dirp = (caddr_t)(p + 1);
+    return *p & 0xFF;
+}
+
+/*
+ * uchar - Return the next character from a user string
+ */
+int uchar(void) {
+    int c;
+    
+    c = fubyte(u.u_dirp);
+    u.u_dirp = (caddr_t)((char *)u.u_dirp + 1);
+    if (c == -1) {
+        u.u_error = EFAULT;
+    }
+    return c;
+}
+
+/*
+ * namei - Convert a pathname into a pointer to an inode
+ *
+ * func = function called to get next char of name
+ *        &uchar if name is in user space
+ *        &schar if name is in system space
+ * flag = 0 if name is sought
+ *        1 if name is to be created
+ *        2 if name is to be deleted
+ *
+ * Returns: pointer to locked inode, or NULL on error
  */
 struct inode *namei(int (*func)(void), int flag) {
     struct inode *dp;
     struct buf *bp;
-    struct direct *ep;
+    int c;
     char *cp;
-    int c, eo;
-    int off;
-    char dbuf[DIRSIZ];
+    off_t eo;
     int i;
     
-    /* Start with either root or current directory */
-    cp = u.u_dirp;
-    if (*cp == '/') {
-        dp = u.u_rdir;
-        if (dp == NULL) dp = u.u_cdir;
-        cp++;
-    } else {
-        dp = u.u_cdir;
+    
+    /*
+     * If name starts with '/' start from root;
+     * otherwise start from current directory.
+     */
+    dp = u.u_cdir;
+    c = (*func)();
+    
+    if (c == '/') {
+        dp = rootdir;
     }
     
     if (dp == NULL) {
@@ -54,166 +87,224 @@ struct inode *namei(int (*func)(void), int flag) {
         return NULL;
     }
     
-    dp->i_count++;
+    dp = iget(dp->i_dev, dp->i_number);
+    if (dp == NULL) {
+        return NULL;
+    }
     
-cloop:
     /* Skip leading slashes */
-    while (*cp == '/') cp++;
+    while (c == '/') {
+        c = (*func)();
+    }
+    /* printf("namei: after slash skip, c=0x%x ('%c')\n", c & 0xFF, (c >= 32 && c < 127) ? c : '?'); */
     
-    if (*cp == '\0') {
-        /* End of pathname */
+    /* Empty pathname or just '/' */
+    if (c == '\0' && flag != 0) {
+        u.u_error = ENOENT;
+        /* printf("namei: empty path, going to out\n"); */
+        goto out;
+    }
+
+cloop:
+    /*
+     * Here dp contains pointer to last component matched.
+     */
+    /* printf("namei: cloop c=0x%x\n", c & 0xFF); */
+    if (u.u_error) {
+        goto out;
+    }
+    
+    if (c == '\0') {
+        /* printf("namei: returning dp=%x\n", (uint32_t)dp); */
         return dp;
     }
     
-    /* Collect component name */
-    for (i = 0; i < DIRSIZ; i++) {
-        c = *cp;
-        if (c == '\0' || c == '/') {
-            dbuf[i] = '\0';
-        } else {
-            dbuf[i] = c;
-            cp++;
-        }
-    }
-    
-    /* Skip remaining chars of component */
-    while (*cp != '\0' && *cp != '/') cp++;
-    
-    /* Must be a directory to search */
+    /*
+     * If there is another component, dp must be a directory
+     * and must have execute permission.
+     */
     if ((dp->i_mode & IFMT) != IFDIR) {
-        iput(dp);
         u.u_error = ENOTDIR;
-        return NULL;
+        goto out;
     }
     
-    /* Search directory */
-    off = 0;
+    if (access(dp, IEXEC)) {
+        goto out;
+    }
+    
+    /*
+     * Gather up name into users' dir buffer.
+     */
+    cp = u.u_dbuf;
+    while (c != '/' && c != '\0' && u.u_error == 0) {
+        if (cp < &u.u_dbuf[DIRSIZ]) {
+            *cp++ = c;
+        }
+        c = (*func)();
+    }
+    
+    /* Pad with nulls */
+    while (cp < &u.u_dbuf[DIRSIZ]) {
+        *cp++ = '\0';
+    }
+    
+    /* Skip any trailing slashes */
+    while (c == '/') {
+        c = (*func)();
+    }
+    
+    if (u.u_error) {
+        goto out;
+    }
+    
+    /*
+     * Set up to search a directory.
+     */
+    u.u_offset[0] = 0;
+    u.u_offset[1] = 0;
+    u.u_segflg = 1;  /* Kernel space */
     eo = 0;
+    u.u_count = (dp->i_size1 + (dp->i_size0 << 16)) / (DIRSIZ + 2);
     bp = NULL;
-    
-    while (off < dp->i_size) {
-        /* Read directory block */
-        if ((off % 512) == 0) {
-            if (bp) brelse(bp);
-            bp = bread(dp->i_dev, bmap(dp, off / 512));
-            if (bp == NULL) {
-                iput(dp);
-                return NULL;
+
+eloop:
+    /*
+     * If at the end of the directory, the search failed.
+     * Report what is appropriate as per flag.
+     */
+    /* printf("namei: eloop u.u_count=%d u.u_offset[1]=%d\n", u.u_count, u.u_offset[1]); */
+    if (u.u_count == 0) {
+        if (bp != NULL) {
+            brelse(bp);
+        }
+        
+        if (flag == 1 && c == '\0') {
+            /* Creating - check write permission */
+            if (access(dp, IWRITE)) {
+                goto out;
             }
+            u.u_pdir = dp;
+            if (eo) {
+                u.u_offset[1] = eo - DIRSIZ - 2;
+            } else {
+                dp->i_flag |= IUPD;
+            }
+            return NULL;  /* Signal to caller to create */
         }
         
-        ep = (struct direct *)(bp->b_addr + (off % 512));
-        off += sizeof(struct direct);
-        
-        if (ep->d_ino == 0) {
-            /* Empty slot */
-            if (eo == 0) eo = off - sizeof(struct direct);
-            continue;
+        u.u_error = ENOENT;
+        goto out;
+    }
+    
+    /*
+     * If offset is on a block boundary,
+     * read the next directory block.
+     * Release previous if it exists.
+     */
+    if ((u.u_offset[1] & (BSIZE - 1)) == 0) {
+        if (bp != NULL) {
+            brelse(bp);
         }
-        
-        /* Compare names */
-        for (i = 0; i < DIRSIZ; i++) {
-            if (dbuf[i] != ep->d_name[i]) break;
-            if (dbuf[i] == '\0') break;
-        }
-        
-        if (i >= DIRSIZ || dbuf[i] == ep->d_name[i]) {
-            /* Match */
-            int ino = ep->d_ino;
-            int dev = dp->i_dev;
-            
+        /* printf("namei: reading dir block for offset=%d\n", u.u_offset[1]); */
+        bp = bread(dp->i_dev, bmap(dp, u.u_offset[1] / BSIZE, 0));
+        /* printf("namei: bread returned bp=%x\n", (uint32_t)bp); */
+        if (bp == NULL || (bp->b_flags & B_ERROR)) {
             if (bp) brelse(bp);
-            iput(dp);
-            
-            dp = iget(dev, ino);
-            goto cloop;
+            goto out;
         }
     }
     
-    /* Not found */
-    if (bp) brelse(bp);
+    /*
+     * Note first empty directory slot in eo for possible creat.
+     * String compare the directory entry and the current component.
+     */
+    bcopy(bp->b_addr + (u.u_offset[1] & (BSIZE - 1)), 
+          &u.u_dent, DIRSIZ + 2);
     
-    if (flag == 1 && *cp == '\0') {
-        /* Creating - save parent directory info */
+    u.u_offset[1] += DIRSIZ + 2;
+    u.u_count--;
+    
+    /* Empty slot */
+    if (u.u_dent.u_ino == 0) {
+        if (eo == 0) {
+            eo = u.u_offset[1];
+        }
+        goto eloop;
+    }
+    
+    /* Compare names */
+    for (i = 0; i < DIRSIZ; i++) {
+        if (u.u_dbuf[i] != u.u_dent.u_name[i]) {
+            goto eloop;
+        }
+    }
+    
+    /*
+     * Here a component matched in a directory.
+     * If there is more pathname, go back to cloop,
+     * otherwise return.
+     */
+    if (bp != NULL) {
+        brelse(bp);
+    }
+    
+    if (flag == 2 && c == '\0') {
+        /* Deleting - check write permission */
+        if (access(dp, IWRITE)) {
+            goto out;
+        }
+        /* Return inode being deleted; keep parent in u.u_pdir */
         u.u_pdir = dp;
-        u.u_offset = eo ? eo : dp->i_size;
+        dev_t dev = dp->i_dev;
+        ino_t ino = u.u_dent.u_ino;
+        dp = iget(dev, ino);
+        if (dp == NULL) {
+            iput(u.u_pdir);
+            u.u_pdir = NULL;
+            return NULL;
+        }
+        return dp;
+    }
+    
+    /* Move to next component */
+    dev_t dev = dp->i_dev;
+    ino_t ino = u.u_dent.u_ino;
+    iput(dp);
+    dp = iget(dev, ino);
+    if (dp == NULL) {
         return NULL;
     }
     
+    goto cloop;
+
+out:
     iput(dp);
-    u.u_error = ENOENT;
     return NULL;
 }
 
 /*
- * bmap - Map file block number to disk block number
- * 
- * Returns the disk block number for the given file block
+ * getdir - Get inode for directory containing file
+ * Used for link() and unlink() system calls
  */
-int bmap(struct inode *ip, int bn) {
-    struct buf *bp;
-    int *bap;
-    int nb;
-    int i, j, sh;
+struct inode *getdir(void) {
+    struct inode *ip;
     
-    /* Direct blocks: 0-5 */
-    if (bn < 6) {
-        return ip->i_addr[bn];
+    ip = namei(uchar, 2);  /* Flag 2 = delete mode */
+    if (ip == NULL) {
+        return NULL;
     }
     
-    /* Single indirect: 6 */
-    bn -= 6;
-    if (bn < 128) {
-        i = ip->i_addr[6];
-        if (i == 0) return 0;
-        
-        bp = bread(ip->i_dev, i);
-        if (bp == NULL) return 0;
-        
-        bap = (int *)bp->b_addr;
-        nb = bap[bn];
-        brelse(bp);
-        return nb;
-    }
-    
-    /* Double indirect: 7 */
-    bn -= 128;
-    i = ip->i_addr[7];
-    if (i == 0) return 0;
-    
-    bp = bread(ip->i_dev, i);
-    if (bp == NULL) return 0;
-    
-    bap = (int *)bp->b_addr;
-    j = bn / 128;
-    i = bap[j];
-    brelse(bp);
-    
-    if (i == 0) return 0;
-    
-    bp = bread(ip->i_dev, i);
-    if (bp == NULL) return 0;
-    
-    bap = (int *)bp->b_addr;
-    nb = bap[bn % 128];
-    brelse(bp);
-    
-    return nb;
+    return ip;
 }
 
 /*
- * schar - Get next character from user or kernel space
+ * Check if inode is sticky directory
+ * Returns 1 if deletion should be prevented
  */
-int schar(void) {
-    char c;
-    
-    if (u.u_segflg) {
-        /* Kernel space */
-        c = *u.u_dirp++;
-    } else {
-        /* User space - for now, treat same */
-        c = *u.u_dirp++;
+int stickycheck(struct inode *ip) {
+    if ((ip->i_mode & ISVTX) && u.u_uid != 0 && 
+        u.u_uid != ip->i_uid) {
+        return 1;
     }
-    
-    return c & 0377;
+    return 0;
 }

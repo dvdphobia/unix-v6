@@ -17,18 +17,27 @@ GRUB_MKRESCUE = grub-mkrescue
 CFLAGS        = -ffreestanding -O2 -nostdlib -Wall -Wextra -Wno-unused-parameter
 CFLAGS       += -I. -I.. -std=gnu99 -fno-builtin -fno-stack-protector
 ASFLAGS       = --32
-LDFLAGS       = -T linker.ld -nostdlib
+LDFLAGS       = -T arch/x86/linker.ld -nostdlib
 
 # Source files - Assembly
-ASM_SRCS      = x86.S
+ASM_SRCS      = arch/x86/x86.S
 ASM_OBJS      = $(ASM_SRCS:.S=.o)
 
 # Source files - C (ported from original V6)
 # Kernel core
-KERNEL_SRCS   = main.c slp.c trap.c sysent.c bio.c alloc.c iget.c nami.c fio.c rdwri.c sig.c sys.c tty.c malloc.c clock.c pipe.c text.c
+CORE_SRCS     = core/main.c core/trap.c core/sysent.c core/sig.c core/sys.c \
+                core/tty.c core/malloc.c core/clock.c core/pipe.c core/text.c
+
+# Filesystem
+FS_SRCS       = fs/bio.c fs/alloc.c fs/iget.c fs/nami.c fs/fio.c fs/rdwri.c
+
+# Scheduler
+SCHED_SRCS    = sched/slp.c
+
 # Drivers
 DRIVER_SRCS   = drivers/block/ramdisk.c drivers/block/ide.c drivers/char/console.c
-C_SRCS        = $(KERNEL_SRCS) $(DRIVER_SRCS)
+
+C_SRCS        = $(CORE_SRCS) $(FS_SRCS) $(SCHED_SRCS) $(DRIVER_SRCS)
 C_OBJS        = $(C_SRCS:.c=.o)
 
 # All objects
