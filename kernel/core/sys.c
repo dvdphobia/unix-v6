@@ -76,6 +76,8 @@ extern struct buf *getblk(dev_t dev, daddr_t blkno);
 extern void brelse(struct buf *bp);
 extern int uchar(void);
 extern int syspipe(void);
+extern void readp(struct file *fp);
+extern void writep(struct file *fp);
 extern int fubyte(caddr_t addr);
 extern int fuword(caddr_t addr);
 extern int subyte(caddr_t addr, int val);
@@ -796,6 +798,7 @@ void stat1(struct inode *ip) {
         uint32_t st_size;
         time_t  st_atime;
         time_t  st_mtime;
+        time_t  st_ctime;
     } statbuf;
     
     statbuf.st_dev = ip->i_dev;
@@ -808,9 +811,10 @@ void stat1(struct inode *ip) {
     statbuf.st_size = ((ip->i_size0 & 0xFF) << 16) | ip->i_size1;
     statbuf.st_atime = ip->i_atime;
     statbuf.st_mtime = ip->i_mtime;
+    statbuf.st_ctime = ip->i_ctime;
     
-    /* Copy to user space */
-    caddr_t dst = (caddr_t)u.u_arg[0];
+    /* Copy to user space - buf is always 2nd arg */
+    caddr_t dst = (caddr_t)u.u_arg[1];
     char *src = (char *)&statbuf;
     int i;
     
@@ -2311,12 +2315,13 @@ static int dir_empty(struct inode *ip) {
 
 /*
  * sys_mkdir - Create directory (syscall #64)
+ * args: (char *path, mode_t mode)
  */
 int sys_mkdir(void) {
-    struct inode *ip;
-    struct inode *dp;
+    struct inode *ip = NULL;
+    struct inode *dp = NULL;
     mode_t mode;
-    
+
     u.u_dirp = (caddr_t)u.u_arg[0];
     ip = namei(uchar, 1);
     if (ip != NULL) {
@@ -2333,106 +2338,164 @@ int sys_mkdir(void) {
         u.u_error = EIO;
         return -1;
     }
-    
+
+    /* permissions */
     mode = (u.u_arg[1] & 07777) & ~(u.u_procp->p_umask);
-    
+
+    /* allocate inode on same device as parent */
     ip = ialloc(dp->i_dev);
     if (ip == NULL) {
         iput(dp);
         u.u_pdir = NULL;
         return -1;
     }
-    
-    ip->i_flag |= IACC | IUPD;
-    ip->i_mode = (mode & 07777) | IFDIR | IALLOC;
-    ip->i_nlink = 2;
-    ip->i_uid = u.u_uid;
-    ip->i_gid = u.u_gid;
+
+    /* init new dir inode */
+    ip->i_flag |= IACC | IUPD | ICHG;
+    ip->i_mode  = (mode & 07777) | IFDIR | IALLOC;
+    ip->i_nlink = 2;          /* "." and parent ".." */
+    ip->i_uid   = u.u_uid;
+    ip->i_gid   = u.u_gid;
     ip->i_atime = time[1];
     ip->i_mtime = time[1];
     ip->i_ctime = time[1];
-    
-    /* Write "." and ".." */
+
+    /* Write "." and ".." into the new directory */
     struct {
         ino_t d_ino;
-        char d_name[DIRSIZ];
+        char  d_name[DIRSIZ];
     } dirbuf[2];
-    
+
     for (int i = 0; i < DIRSIZ; i++) {
-        dirbuf[0].d_name[i] = '\0';
-        dirbuf[1].d_name[i] = '\0';
+        dirbuf[0].d_name[i] = 0;
+        dirbuf[1].d_name[i] = 0;
     }
+
     dirbuf[0].d_ino = ip->i_number;
     dirbuf[0].d_name[0] = '.';
+
     dirbuf[1].d_ino = dp->i_number;
     dirbuf[1].d_name[0] = '.';
     dirbuf[1].d_name[1] = '.';
-    
+
     u.u_offset[0] = 0;
     u.u_offset[1] = 0;
-    u.u_base = (caddr_t)dirbuf;
-    u.u_count = sizeof(dirbuf);
+    u.u_base   = (caddr_t)dirbuf;
+    u.u_count  = sizeof(dirbuf);
     u.u_segflg = 1;
-    
+
     writei(ip);
     if (u.u_error) {
+        /* rollback new inode */
         ip->i_nlink = 0;
+        ip->i_flag |= ICHG;
         iput(ip);
+
         iput(dp);
         u.u_pdir = NULL;
         return -1;
     }
-    
-    /* Add entry to parent */
-    dp->i_nlink++;
-    dp->i_flag |= IUPD;
-    dp->i_ctime = time[1];
+
+    /* Explicitly update size if writei didn't */
+    if (ip->i_size1 < sizeof(dirbuf)) {
+        ip->i_size0 = 0;
+        ip->i_size1 = sizeof(dirbuf);
+        ip->i_flag |= IUPD;
+    }
+
+    /*
+     * Add entry in parent.
+     * wdir(ip) typically uses u.u_pdir and u.u_dent info from namei().
+     */
     u.u_pdir = dp;
     wdir(ip);
+
+    if (u.u_error) {
+        /* rollback parent + new dir */
+        u.u_pdir = NULL;
+
+        /* remove contents and free inode */
+        itrunc(ip);
+        ip->i_nlink = 0;
+        ip->i_flag |= ICHG;
+        ip->i_ctime = time[1];
+        iput(ip);
+
+        iput(dp);
+        return -1;
+    }
+
+    /* Only now update parent's link count (directory gained a subdir) */
+    dp->i_nlink++;
+    dp->i_flag |= IUPD | ICHG;
+    dp->i_ctime = time[1];
+
     u.u_pdir = NULL;
+
     iput(ip);
-    
+    iput(dp);
+
     u.u_ar0[EAX] = 0;
     return 0;
 }
 
+
 /*
  * sys_rmdir - Remove directory (syscall #65)
+ * args: (char *path)
  */
 int sys_rmdir(void) {
     struct inode *ip;
-    
+
     u.u_dirp = (caddr_t)u.u_arg[0];
-    ip = namei(uchar, 2);
+    ip = namei(uchar, 2);   /* lookup existing; sets u.u_pdir and u.u_offset at entry */
     if (ip == NULL)
         return -1;
-    
+
     if ((ip->i_mode & IFMT) != IFDIR) {
         iput(ip);
+        if (u.u_pdir) { iput(u.u_pdir); u.u_pdir = NULL; }
         u.u_error = ENOTDIR;
         return -1;
     }
-    
+
+    /* don't remove "." or ".." (depends on how namei stores the found name) */
+    /* If you have u.u_dent name available, check it here. */
+    if (u.u_dent.u_name[0] == '.' &&
+        (u.u_dent.u_name[1] == '\0' || (u.u_dent.u_name[1] == '.' && u.u_dent.u_name[2] == '\0'))) {
+        iput(ip);
+        if (u.u_pdir) { iput(u.u_pdir); u.u_pdir = NULL; }
+        u.u_error = EINVAL;
+        return -1;
+    }
+
+    /* directory must be empty (besides "." and "..") */
     if (!dir_empty(ip)) {
         iput(ip);
-        if (u.u_pdir) {
-            iput(u.u_pdir);
-            u.u_pdir = NULL;
-        }
+        if (u.u_pdir) { iput(u.u_pdir); u.u_pdir = NULL; }
         u.u_error = EBUSY;
         return -1;
     }
-    
-    prele(ip);
-    
+
     /* Clear directory entry in parent */
-    u.u_offset[1] -= DIRSIZ + 2;
+    /* IMPORTANT: subtract the entry size from the full offset correctly in your kernel */
+    /* entry size is (DIRSIZ + sizeof(ino_t)) => often DIRSIZ+2 */
+    /* If u.u_offset is split-high/low, use proper subtract helper. */
+    u.u_offset[1] -= (DIRSIZ + 2);   /* <-- replace with proper lsub() if needed */
+
     u.u_base = (caddr_t)&u.u_dent;
     u.u_count = DIRSIZ + 2;
     u.u_dent.u_ino = 0;
     u.u_segflg = 1;
+
     writei(u.u_pdir);
-    
+    if (u.u_error) {
+        iput(ip);
+        if (u.u_pdir) { iput(u.u_pdir); u.u_pdir = NULL; }
+        return -1;
+    }
+
+    /* Update parent link count only after successful entry clear */
     if (u.u_pdir) {
         u.u_pdir->i_nlink--;
         u.u_pdir->i_flag |= ICHG;
@@ -2440,16 +2503,18 @@ int sys_rmdir(void) {
         iput(u.u_pdir);
         u.u_pdir = NULL;
     }
-    
+
+    /* Drop the directory inode */
     itrunc(ip);
     ip->i_nlink = 0;
     ip->i_flag |= ICHG;
     ip->i_ctime = time[1];
     iput(ip);
-    
+
     u.u_ar0[EAX] = 0;
     return 0;
 }
+
 
 /*
  * sys_chmod - Change file mode (syscall #66)

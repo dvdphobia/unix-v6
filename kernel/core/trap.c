@@ -57,7 +57,7 @@ extern int nullsys(void);
  *   EIP, CS, EFLAGS (pushed by CPU)
  *   ESP, SS (if from user mode)
  */
-void trap1(int (*func)(void));
+int trap1(int (*func)(void));
 
 /*
  * trap - Handle processor traps and exceptions
@@ -330,7 +330,6 @@ void trap(uint32_t *frame) {
         u.u_arg[5] = fuword((caddr_t)frame[UESP]);
         
         /* Call the system call handler */
-        /* printf("trap: calling syscall handler, arg0=%x arg1=%x\n", u.u_arg[0], u.u_arg[1]); */
         trap1(callp->call);
         /* printf("trap: syscall returned\n"); */
         
@@ -346,7 +345,7 @@ void trap(uint32_t *frame) {
             }
             /* Return -errno in EAX for Linux-style syscall ABI */
             frame[EFLAGS] |= EFLAGS_CF;
-            frame[EAX] = (uint32_t)(-(int32_t)u.u_error);
+            frame[EAX] = u.u_error;
         } else {
             /* Clear carry flag, return value in EAX */
             frame[EFLAGS] &= ~EFLAGS_CF;
@@ -421,7 +420,7 @@ userret:
  * trap1 - Call a system call handler
  * From original V6 ken/trap.c
  */
-void trap1(int (*func)(void)) {
+int trap1(int (*func)(void)) {
     /* Save registers for signals */
     extern int savu(uint32_t *);
     
@@ -430,7 +429,7 @@ void trap1(int (*func)(void)) {
     /* printf("trap1: savu done, calling handler\n"); */
     
     /* Call the handler */
-    (*func)();
+    return (*func)();
     /* printf("trap1: handler returned\n"); */
 }
 

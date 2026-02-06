@@ -71,10 +71,19 @@ static void kbd_putc(char c) {
 
 int kbd_getc(void) {
     if (kbd_read_ptr == kbd_write_ptr) {
-        /* Poll serial for input if interrupts aren't feeding the buffer yet. */
+        /* Poll serial for input if interrupts aren't feeding the buffer yet. 
+         * Must disable interrupts to avoid race with serial_intr 
+         */
+        int s = spl7();
         if (inb(0x3F8 + 5) & 0x01) {
-            kbd_putc((char)inb(0x3F8));
+            char c = (char)inb(0x3F8);
+            /* We stole the char from ISR, so we must put it in buffer or return it.
+             * Since we want to use the buffer, let's put it there.
+             */
+            splx(s);
+            kbd_putc(c);
         } else {
+            splx(s);
             return -1; /* Buffer empty */
         }
     }
@@ -121,12 +130,7 @@ int conread(dev_t dev) {
     while (u.u_count > 0) {
         int c;
         while ((c = kbd_getc()) < 0) {
-            /* Poll serial for input to avoid IRQ dependency */
-            if (inb(0x3F8 + 5) & 0x01) {
-                c = inb(0x3F8);
-                break;
-            }
-            /* No IRQ wakeups on serial-only configs (e.g. -serial stdio). */
+            /* Wait for input (busy wait because we don't have sleep/wakeup fully wired for serial yet) */
             __asm__ __volatile__("pause");
         }
         

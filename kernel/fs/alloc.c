@@ -182,7 +182,7 @@ void bfree(dev_t dev, daddr_t bno) {
     }
     
     /* If list is full, write it out to disk */
-    if (fp->s_nfree >= 100) {
+    if (fp->s_nfree >= NICFREE) {
         fp->s_flock++;
         bp = getblk(dev, bno);
         ip = (daddr_t *)bp->b_addr;
@@ -290,14 +290,14 @@ loop:
             
             /* Found a free inode */
             fp->s_inode[fp->s_ninode++] = ino;
-            if (fp->s_ninode >= 100) {
+            if (fp->s_ninode >= NICINOD) {
                 break;
             }
         cont:
             continue;
         }
         brelse(bp);
-        if (fp->s_ninode >= 100) {
+        if (fp->s_ninode >= NICINOD) {
             break;
         }
     }
@@ -331,7 +331,7 @@ void ifree(dev_t dev, ino_t ino) {
         return;
     }
     
-    if (fp->s_ninode >= 100) {
+    if (fp->s_ninode >= NICINOD) {
         return;
     }
     
@@ -352,7 +352,7 @@ struct filsys *getfs(dev_t dev) {
             fp = (struct filsys *)mp->m_bufp->b_addr;
             
             /* Sanity check */
-            if (fp->s_nfree > 100 || fp->s_ninode > 100) {
+            if (fp->s_nfree > NICFREE || fp->s_ninode > NICINOD) {
                 prdev("bad count", dev);
                 fp->s_nfree = 0;
                 fp->s_ninode = 0;

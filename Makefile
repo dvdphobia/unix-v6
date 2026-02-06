@@ -42,6 +42,9 @@ iso: kernel
 run: iso
 	@$(MAKE) -C $(KERNEL_DIR) run
 
+run-vga: iso
+	@$(MAKE) -C $(KERNEL_DIR) run-vga
+
 clean:
 	@$(MAKE) -C $(KERNEL_DIR) clean
 	@$(MAKE) -C $(USER_DIR) clean

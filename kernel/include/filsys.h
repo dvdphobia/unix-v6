@@ -19,15 +19,18 @@ struct filsys {
     uint16_t    s_isize;        /* Size in blocks of I-list */
     daddr_t     s_fsize;        /* Size in blocks of entire volume */
     int16_t     s_nfree;        /* Number of addresses in s_free */
-    daddr_t     s_free[100];    /* Free block list */
+    daddr_t     s_free[NICFREE]; /* Free block list */
     int16_t     s_ninode;       /* Number of inodes in s_inode */
-    ino_t       s_inode[100];   /* Free inode list */
+    ino_t       s_inode[NICINOD]; /* Free inode list */
     int8_t      s_flock;        /* Lock during free list manipulation */
     int8_t      s_ilock;        /* Lock during I-list manipulation */
     int8_t      s_fmod;         /* Superblock modified flag */
     int8_t      s_ronly;        /* Mounted read-only flag */
     time_t      s_time[2];      /* Last super block update (64-bit time) */
     /* Padding to fill 512-byte block */
+    char        s_pad[512 - sizeof(uint16_t) - sizeof(daddr_t) - sizeof(int16_t) - 
+                      (NICFREE * sizeof(daddr_t)) - sizeof(int16_t) - (NICINOD * sizeof(ino_t)) - 
+                      4 - (2 * sizeof(time_t))];
 };
 
 /*

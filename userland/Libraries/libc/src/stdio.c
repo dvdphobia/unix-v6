@@ -299,30 +299,86 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap) {
         
         format++; /* Skip % */
         
-        if (*format == '%') {
-            str[pos++] = '%';
+        /* Flags */
+        int zero_pad = 0;
+        int long_arg = 0;
+        int width = 0;
+        
+        while (*format == '0') {
+            zero_pad = 1;
             format++;
-            continue;
         }
         
-        /* Handle format specifiers */
+        /* Width */
+        while (*format >= '0' && *format <= '9') {
+            width = width * 10 + (*format - '0');
+            format++;
+        }
+        
+        /* Length modifiers */
+        if (*format == 'l') {
+            long_arg = 1;
+            format++;
+            if (*format == 'l') { /* Handle 'll' but treat as long for now in 32-bit */
+                format++; 
+            }
+        }
+        
+        /* Specifiers */
         char buf[32];
         
         if (*format == 'd' || *format == 'i') {
-            int num = va_arg(ap, int);
+            long num;
+            if (long_arg) num = va_arg(ap, long);
+            else num = va_arg(ap, int);
+            
             print_num(buf, num, 10, 1);
+            
+            /* Padding */
+            int len = 0;
+            while (buf[len]) len++;
+            
+            while (width > len && pos < size - 1) {
+                str[pos++] = zero_pad ? '0' : ' ';
+                width--;
+            }
+            
             for (char *p = buf; *p && pos < size - 1; p++)
                 str[pos++] = *p;
             format++;
         } else if (*format == 'u') {
-            unsigned int num = va_arg(ap, unsigned int);
+            unsigned long num;
+            if (long_arg) num = va_arg(ap, unsigned long);
+            else num = va_arg(ap, unsigned int);
+            
             print_num(buf, num, 10, 0);
+            
+            int len = 0;
+            while (buf[len]) len++;
+            
+            while (width > len && pos < size - 1) {
+                str[pos++] = zero_pad ? '0' : ' ';
+                width--;
+            }
+            
             for (char *p = buf; *p && pos < size - 1; p++)
                 str[pos++] = *p;
             format++;
         } else if (*format == 'x' || *format == 'X') {
-            unsigned int num = va_arg(ap, unsigned int);
+            unsigned long num;
+            if (long_arg) num = va_arg(ap, unsigned long);
+            else num = va_arg(ap, unsigned int);
+            
             print_num(buf, num, 16, 0);
+            
+            int len = 0;
+            while (buf[len]) len++;
+            
+            while (width > len && pos < size - 1) {
+                str[pos++] = zero_pad ? '0' : ' ';
+                width--;
+            }
+            
             for (char *p = buf; *p && pos < size - 1; p++)
                 str[pos++] = *p;
             format++;
@@ -336,15 +392,32 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap) {
             format++;
         } else if (*format == 's') {
             char *s = va_arg(ap, char *);
-            if (!s)
-                s = "(null)";
+            if (!s) s = "(null)";
+            
+            /* Calculate string length for padding */
+            int len = 0;
+            while (s[len]) len++;
+            
+            /* Right align if width specified (standard behavior is left align for most, 
+               but usually %Xs is right aligned, %-Xs is left. We don't support - yet.)
+               Defaulting to right align like numbers for now as it's common request. */
+            while (width > len && pos < size - 1) {
+                str[pos++] = ' ';
+                width--;
+            }
+            
             while (*s && pos < size - 1)
                 str[pos++] = *s++;
             format++;
         } else if (*format == 'c') {
             str[pos++] = (char)va_arg(ap, int);
             format++;
+        } else if (*format == '%') {
+             str[pos++] = '%';
+             format++;
         } else {
+            /* Unknown specifier, behave like literal % */
+            /* We already consumed %, so just print the char */
             str[pos++] = *format++;
         }
     }

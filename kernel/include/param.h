@@ -84,6 +84,8 @@
 #define BSHIFT      9           /* log2(BSIZE) */
 #define NMASK       (NINDIR-1)  /* Indirect block offset mask */
 #define NSHIFT      7           /* log2(NINDIR) for 32-bit addresses */
+#define NICFREE     50          /* Number of superblock free blocks (limit 50 to fit 512b) */
+#define NICINOD     50          /* Number of superblock inodes */
 
 /*
  * x86 specific addresses

@@ -725,12 +725,17 @@ void kmain(void) {
            rootdir, u.u_cdir, rootdir->i_count);
 
     /* 
-     * Manually open /dev/console for init process
-     * We do this for Process 0, which Process 1 inherits
+     * Create /dev/console on the fly for init process
+     * We allocate a transient inode for major 0, minor 0
      */
-    struct inode *cp;
-    cp = iget(rootdev, 6); /* /dev/console is inode 6 */
+    extern struct inode *ialloc(dev_t dev);
+    struct inode *cp = ialloc(rootdev);
     if (cp) {
+        cp->i_mode = IFCHR | 0600;
+        cp->i_addr[0] = 0; /* Major 0 (Console), Minor 0 */
+        cp->i_nlink = 1;
+        cp->i_flag |= IUPD | IACC;
+
         /* Assign to file descriptor 0, 1, 2 */
         /* Note: This is hacky direct assignment for bootstrap */
         struct file *fp = falloc();

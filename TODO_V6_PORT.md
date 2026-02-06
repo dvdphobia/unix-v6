@@ -25,40 +25,40 @@ This section maps missing POSIX pieces to the files they require, with focus on 
 ### Tier 1 (GCC‑critical)
 **Process & exec pipeline**
 - [ ] `fork`/`exec`/`wait` completeness (exit status, argv/envp handling)
-  - Files: [kernel/sys.c](kernel/sys.c), [kernel/sysent.c](kernel/sysent.c), [userland/syscalls.c](userland/syscalls.c), [userland/syscalls.h](userland/syscalls.h)
+  - Files: [kernel/core/sys.c](kernel/core/sys.c), [kernel/core/sysent.c](kernel/core/sysent.c), [userland/Libraries/libc/src/syscalls.c](userland/Libraries/libc/src/syscalls.c)
 - [ ] `pipe`, `dup`, `dup2`, `close-on-exec`
-  - Files: [kernel/pipe.c](kernel/pipe.c), [kernel/sys.c](kernel/sys.c), [kernel/sysent.c](kernel/sysent.c)
+  - Files: [kernel/core/pipe.c](kernel/core/pipe.c), [kernel/core/sys.c](kernel/core/sys.c), [kernel/core/sysent.c](kernel/core/sysent.c)
 
 **Files & metadata**
 - [ ] `stat`, `fstat`, `lstat` (mode, size, times)
-  - Files: [kernel/sys.c](kernel/sys.c), [kernel/sysent.c](kernel/sysent.c), [kernel/fs/iget.c](kernel/fs/iget.c)
+  - Files: [kernel/core/sys.c](kernel/core/sys.c), [kernel/core/sysent.c](kernel/core/sysent.c), [kernel/fs/iget.c](kernel/fs/iget.c)
 - [ ] `link`, `unlink`, `rename`, `mkdir`, `rmdir`, `chmod`, `umask`
-  - Files: [kernel/sys.c](kernel/sys.c), [kernel/fs/nami.c](kernel/fs/nami.c), [kernel/fs/alloc.c](kernel/fs/alloc.c)
+  - Files: [kernel/core/sys.c](kernel/core/sys.c), [kernel/fs/nami.c](kernel/fs/nami.c), [kernel/fs/alloc.c](kernel/fs/alloc.c)
 
 **Memory**
 - [ ] `brk`/`sbrk` (user heap growth)
-  - Files: [kernel/sys.c](kernel/sys.c), [kernel/alloc.c](kernel/alloc.c), [userland/syscalls.c](userland/syscalls.c)
+  - Files: [kernel/core/sys.c](kernel/core/sys.c), [kernel/core/malloc.c](kernel/core/malloc.c), [userland/Libraries/libc/src/syscalls.c](userland/Libraries/libc/src/syscalls.c)
 
 **Signals**
 - [ ] `sigaction`, `sigprocmask`, `sigsuspend`, `alarm`, `pause`
-  - Files: [kernel/sig.c](kernel/sig.c), [kernel/sys.c](kernel/sys.c), [kernel/sysent.c](kernel/sysent.c)
+  - Files: [kernel/core/sig.c](kernel/core/sig.c), [kernel/core/sys.c](kernel/core/sys.c), [kernel/core/sysent.c](kernel/core/sysent.c)
 
 **Time**
 - [ ] `time`, `gettimeofday`, `sleep`/`nanosleep`
-  - Files: [kernel/clock.c](kernel/clock.c), [kernel/sys.c](kernel/sys.c)
+  - Files: [kernel/core/clock.c](kernel/core/clock.c), [kernel/core/sys.c](kernel/core/sys.c)
 
 ### Tier 2 (needed for a usable build environment)
 **TTY/termios & ioctl**
 - [ ] `tcgetattr`, `tcsetattr`, `tcflush`, `ioctl` basics
-  - Files: [kernel/tty.c](kernel/tty.c), [kernel/drivers/char/tty.c](kernel/drivers/char/tty.c), [kernel/sys.c](kernel/sys.c)
+  - Files: [kernel/core/tty.c](kernel/core/tty.c), [kernel/drivers/char/tty.c](kernel/drivers/char/tty.c), [kernel/core/sys.c](kernel/core/sys.c)
 
 **I/O multiplexing**
 - [ ] `select`/`poll`
-  - Files: [kernel/sys.c](kernel/sys.c), [kernel/pipe.c](kernel/pipe.c), [kernel/tty.c](kernel/tty.c)
+  - Files: [kernel/core/sys.c](kernel/core/sys.c), [kernel/core/pipe.c](kernel/core/pipe.c), [kernel/core/tty.c](kernel/core/tty.c)
 
 **Users/groups**
 - [ ] `getuid`, `getgid`, `setuid`, `setgid`, group/passwd lookups
-  - Files: [kernel/sys.c](kernel/sys.c)
+  - Files: [kernel/core/sys.c](kernel/core/sys.c)
 
 ### Tier 3 (quality & completeness)
 - [ ] `mmap`, `munmap` (optional if `sbrk` is stable)

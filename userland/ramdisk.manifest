@@ -14,6 +14,9 @@
 0000755 /bin/pwd_test build/userland/pwd_test.bin
 0000755 /bin/tcc build/userland/tcc.bin
 0000755 /bin/terminal build/userland/terminal.bin
+0000755 /bin/mkdir build/userland/mkdir.bin
+0000755 /bin/rm build/userland/rm.bin
+0000755 /bin/cp build/userland/cp.bin
 0000644 /etc/motd etc/motd
 0000644 /etc/passwd etc/passwd
 0000644 /etc/group etc/group

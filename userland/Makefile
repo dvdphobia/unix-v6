@@ -21,9 +21,9 @@ CRT_END       = $(BUILD_DIR)/crtend.o $(BUILD_DIR)/crtn.o
 LIBC_LIBS     = $(LIBC)
 
 # Programs
-PROGS         = init sh ls cat echo pwd hello netdemo ps uname clear help pwd_test tcc
+PROGS         = init sh ls cat echo pwd hello netdemo ps uname clear help pwd_test tcc mkdir rm cp
 
-BIN_SRCS      = $(addprefix Utilities/,ls.c cat.c echo.c pwd.c hello.c netdemo.c ps.c uname.c clear.c help.c pwd_test.c tcc.c)
+BIN_SRCS      = $(addprefix Utilities/,ls.c cat.c echo.c pwd.c hello.c netdemo.c ps.c uname.c clear.c help.c pwd_test.c tcc.c mkdir.c rm.c cp.c)
 
 OBJS          = \
                 $(BUILD_DIR)/init.o \
@@ -39,7 +39,14 @@ OBJS          = \
                 $(BUILD_DIR)/clear.o \
                 $(BUILD_DIR)/help.o \
                 $(BUILD_DIR)/pwd_test.o \
-                $(BUILD_DIR)/tcc.o
+                $(BUILD_DIR)/tcc.o \
+                $(BUILD_DIR)/mkdir.o \
+                $(BUILD_DIR)/rm.o \
+                $(BUILD_DIR)/cp.o
+
+# ... (omitted)
+
+
 
 .PHONY: all clean libc crt applications
 
@@ -141,6 +148,18 @@ $(BUILD_DIR)/pwd_test.o: Utilities/pwd_test.c | $(BUILD_DIR)
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD_DIR)/tcc.o: Utilities/tcc.c | $(BUILD_DIR)
+	@echo "CC  $<"
+	@$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/mkdir.o: Utilities/mkdir.c | $(BUILD_DIR)
+	@echo "CC  $<"
+	@$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/rm.o: Utilities/rm.c | $(BUILD_DIR)
+	@echo "CC  $<"
+	@$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/cp.o: Utilities/cp.c | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 

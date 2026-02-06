@@ -3,90 +3,88 @@
 #define _UNISTD_H
 
 #include <stddef.h>
+#include <sys/types.h>
 
 /* Process control */
-int fork(void);
+pid_t fork(void);
 int exec(const char *filename, char *const argv[]);
 int execv(const char *filename, char *const argv[]);
 int execve(const char *filename, char *const argv[], char *const envp[]);
 void exit(int status) __attribute__((noreturn));
 void _exit(int status) __attribute__((noreturn));
-int wait(int *status);
-int waitpid(int pid, int *status, int options);
-int getpid(void);
-int getppid(void);
+pid_t wait(int *status);
+pid_t waitpid(pid_t pid, int *status, int options);
+pid_t getpid(void);
+pid_t getppid(void);
 
 /* File operations */
 int close(int fd);
-int read(int fd, void *buf, int count);
-int write(int fd, const void *buf, int count);
-long lseek(int fd, long offset, int whence);
+ssize_t read(int fd, void *buf, size_t count);
+ssize_t write(int fd, const void *buf, size_t count);
+off_t lseek(int fd, off_t offset, int whence);
 int dup(int oldfd);
 int dup2(int oldfd, int newfd);
 int pipe(int fd[2]);
 int access(const char *pathname, int mode);
 int isatty(int fd);
 int fsync(int fd);
-int truncate(const char *path, int length);
-int ftruncate(int fd, int length);
+int truncate(const char *path, off_t length);
+int ftruncate(int fd, off_t length);
 
 /* File metadata */
-int stat(const char *path, void *buf);
-int fstat(int fd, void *buf);
-int lstat(const char *path, void *buf);
+
 int link(const char *oldpath, const char *newpath);
 int unlink(const char *path);
 int rename(const char *oldpath, const char *newpath);
-int chmod(const char *path, int mode);
-int fchmod(int fd, int mode);
-int chown(const char *path, int owner, int group);
-int lchown(const char *path, int owner, int group);
-int fchown(int fd, int owner, int group);
-int umask(int mask);
+
+int chown(const char *path, uid_t owner, gid_t group);
+int lchown(const char *path, uid_t owner, gid_t group);
+int fchown(int fd, uid_t owner, gid_t group);
+
 
 /* Directory operations */
-int mkdir(const char *path, int mode);
+
 int rmdir(const char *path);
 int chdir(const char *path);
-char *getcwd(char *buf, int size);
+char *getcwd(char *buf, size_t size);
 
 /* User/Group IDs */
-int getuid(void);
-int getgid(void);
-int setuid(int uid);
-int setgid(int gid);
+uid_t getuid(void);
+gid_t getgid(void);
+int setuid(uid_t uid);
+int setgid(gid_t gid);
 
 /* Process groups */
-int getpgid(int pid);
-int setpgid(int pid, int pgid);
-int getpgrp(void);
-int getsid(int pid);
-int setsid(void);
+pid_t getpgid(pid_t pid);
+int setpgid(pid_t pid, pid_t pgid);
+pid_t getpgrp(void);
+pid_t getsid(pid_t pid);
+pid_t setsid(void);
 
 /* Signals */
-int kill(int pid, int sig);
+int kill(pid_t pid, int sig);
 int sigaction(int sig, const void *act, void *oact);
 int sigprocmask(int how, unsigned long *set, unsigned long *oset);
 int sigsuspend(unsigned long *mask);
 int sigpending(unsigned long *set);
 int sigreturn(void);
-int alarm(int seconds);
+int alarm(unsigned int seconds);
 int pause(void);
 
 /* Time */
-long time(long *tloc);
+time_t time(time_t *tloc);
 int gettimeofday(void *tv, void *tz);
-int sleep(int seconds);
+int sleep(unsigned int seconds);
 int nanosleep(const void *rqtp, void *rmtp);
 int utime(const char *path, void *times);
 int utimes(const char *filename, const void *times);
 
 /* Memory */
 int brk(void *addr);
-void *sbrk(int incr);
-void *mmap(void *addr, unsigned long length, int prot, int flags, int fd, long offset);
-int munmap(void *addr, unsigned long length);
-int mprotect(void *addr, unsigned long len, int prot);
+void *sbrk(intptr_t incr);
+void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+int munmap(void *addr, size_t length);
+int mprotect(void *addr, size_t len, int prot);
 
 /* I/O control */
 int ioctl(int fd, unsigned long request, void *argp);
@@ -97,8 +95,8 @@ int poll(void *fds, unsigned int nfds, int timeout);
 int tcgetattr(int fd, void *termios_p);
 int tcsetattr(int fd, int optional_actions, const void *termios_p);
 int tcflush(int fd, int queue_selector);
-int tcgetpgrp(int fd);
-int tcsetpgrp(int fd, int pgid);
+pid_t tcgetpgrp(int fd);
+int tcsetpgrp(int fd, pid_t pgid);
 
 /* Resource limits */
 int getrlimit(int resource, void *rlim);

@@ -17,6 +17,8 @@ static void print_motd(void) {
 int main() {
     int pid;
     char *argv[] = {"sh", 0};
+    
+    write(1, "INIT: Starting...\n", 18);
 
     print_motd();
     

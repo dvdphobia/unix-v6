@@ -774,7 +774,7 @@ static void rd_mkfs(void) {
     rd_write_dir(dip[ino_bin - 1].i_addr[0], bin_dir, bin_cnt);
 
     int nfree = 0;
-    for (daddr_t b = data_block; b < RAMDISK_BLOCKS && nfree < 100; b++) {
+    for (daddr_t b = data_block; b < RAMDISK_BLOCKS && nfree < NICFREE; b++) {
         fp->s_free[nfree++] = b;
     }
     fp->s_nfree = nfree;

@@ -7,6 +7,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+/* V6 headers for wait macros in case stdlib doesn't have them */
+#include <sys/wait.h>
+
+#ifndef WAIT_ANY
+#define WAIT_ANY (-1)
+#endif
 
 #define BUFFER_SIZE 512
 #define HISTORY_SIZE 50
@@ -18,7 +24,8 @@ typedef struct {
     int current;
 } History;
 
-static History history = {{0}, 0, 0};
+/* Fixed initialization warning */
+static History history = { .count = 0, .current = 0 };
 
 void add_to_history(const char *cmd) {
     if (history.count < HISTORY_SIZE) {
@@ -103,27 +110,15 @@ int execute_builtin(const char *cmd, char **args) {
         print_history();
         return 1;
     } else if (strcmp(cmd, "clear") == 0) {
-        /* Execute clear command */
-        int pid = fork();
-        if (pid == 0) {
-            char *argv[] = {"clear", NULL};
-            execv("clear", argv);
-            exit(127);
-        } else if (pid > 0) {
-            int status;
-            waitpid(pid, &status, 0);
-        }
+        /* Escape sequence to clear screen (ANSI) */
+        printf("\033[2J\033[H");
         return 1;
     } else if (strcmp(cmd, "pwd") == 0) {
-        /* Execute pwd command */
-        int pid = fork();
-        if (pid == 0) {
-            char *argv[] = {"pwd", NULL};
-            execv("pwd", argv);
-            exit(127);
-        } else if (pid > 0) {
-            int status;
-            waitpid(pid, &status, 0);
+        char buf[256];
+        if (getcwd(buf, sizeof(buf))) {
+            printf("%s\n", buf);
+        } else {
+            printf("pwd: error getting cwd\n");
         }
         return 1;
     } else if (strcmp(cmd, "cd") == 0) {
@@ -181,7 +176,18 @@ void execute_command(char *line) {
     
     int pid = fork();
     if (pid == 0) {
+        /* Child process */
+        /* Set pgid for job control if we had it */
+        /* setpgid(0, 0); */
+        
         execv(full_path, args);
+        
+        /* If execv returns, it failed */
+        /* Try without /bin prefix if it failed */
+        if (args[0][0] != '/') {
+             execv(args[0], args);
+        }
+        
         printf("%s: command not found\n", args[0]);
         exit(127);
     } else if (pid > 0) {
@@ -202,11 +208,20 @@ int main(int argc, char *argv[]) {
     while (1) {
         print_prompt();
         
+        /* memset input to avoid garbage */
+        memset(input, 0, sizeof(input));
+        
         if (fgets(input, sizeof(input), stdin) == NULL) {
             break;
         }
         
+        /* Handle empty lines */
+        if (input[0] == '\n' || input[0] == '\0') continue;
+        
         if (strlen(input) > 0) {
+            /* Strip newline from history */
+            char *nl = strchr(input, '\n');
+            if (nl) *nl = 0;
             add_to_history(input);
             execute_command(input);
         }
