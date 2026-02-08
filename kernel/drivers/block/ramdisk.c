@@ -160,8 +160,8 @@ static void rd_write_data_inode(struct rd_inode *ip, const uint8_t *data, uint32
     for (j = 0; j < 7 && bn < blocks; j++) {
         uint32_t indir[NINDIR];
         int i;
-        for (i = 0; i < NINDIR; i++) indir[i] = 0;
-        for (i = 0; i < NINDIR && bn < blocks; i++) {
+        for (i = 0; i < (int)NINDIR; i++) indir[i] = 0;
+        for (i = 0; i < (int)NINDIR && bn < blocks; i++) {
             indir[i] = (*data_block)++;
             rd_write_block(indir[i], data + (bn * BSIZE), bytes - (bn * BSIZE));
             bn++;
@@ -173,12 +173,12 @@ static void rd_write_data_inode(struct rd_inode *ip, const uint8_t *data, uint32
     if (bn < blocks) {
         uint32_t dindir[NINDIR];
         int di;
-        for (di = 0; di < NINDIR; di++) dindir[di] = 0;
-        for (di = 0; di < NINDIR && bn < blocks; di++) {
+        for (di = 0; di < (int)NINDIR; di++) dindir[di] = 0;
+        for (di = 0; di < (int)NINDIR && bn < blocks; di++) {
             uint32_t indir[NINDIR];
             int i;
-            for (i = 0; i < NINDIR; i++) indir[i] = 0;
-            for (i = 0; i < NINDIR && bn < blocks; i++) {
+            for (i = 0; i < (int)NINDIR; i++) indir[i] = 0;
+            for (i = 0; i < (int)NINDIR && bn < blocks; i++) {
                 indir[i] = (*data_block)++;
                 rd_write_block(indir[i], data + (bn * BSIZE), bytes - (bn * BSIZE));
                 bn++;
@@ -219,11 +219,11 @@ static void rd_mkfs(void);
  * rd_init - Initialize RAM disk with a minimal filesystem
  */
 void rd_init(void) {
-    extern void printf(const char *fmt, ...);
+    extern void kprintf(const char *fmt, ...);
     extern struct bdevsw bdevsw[];
     extern int nblkdev;
     
-    printf("ramdisk: initializing %d KB RAM disk\n", RAMDISK_SIZE / 1024);
+    kprintf("ramdisk: initializing %d KB RAM disk\n", RAMDISK_SIZE / 1024);
     
     /* Clear RAM disk */
     for (int i = 0; i < RAMDISK_SIZE; i++) {
@@ -237,7 +237,7 @@ void rd_init(void) {
     /* Create a minimal V6 filesystem on the RAM disk */
     rd_mkfs();
     
-    printf("ramdisk: ready, %d blocks available\n", RAMDISK_BLOCKS);
+    kprintf("ramdisk: ready, %d blocks available\n", RAMDISK_BLOCKS);
 }
 
 /*
@@ -249,6 +249,7 @@ static void rd_mkfs(void) {
     struct v6_direct root_dir[16];
     struct v6_direct etc_dir[16];
     struct v6_direct bin_dir[32];
+    struct v6_direct sbin_dir[16];
     struct v6_direct dev_dir[8];
     struct v6_direct usr_dir[8];
     static struct v6_direct include_dir[256];
@@ -260,7 +261,7 @@ static void rd_mkfs(void) {
     static struct v6_direct inc_netpacket_dir[64];
     static struct v6_direct inc_scsi_dir[64];
     static struct v6_direct inc_sys_dir[64];
-    int root_cnt = 0, etc_cnt = 0, bin_cnt = 0, dev_cnt = 0, usr_cnt = 0;
+    int root_cnt = 0, etc_cnt = 0, bin_cnt = 0, sbin_cnt = 0, dev_cnt = 0, usr_cnt = 0;
     int include_cnt = 0, lib_cnt = 0;
     int inc_arpa_cnt = 0, inc_bits_cnt = 0, inc_net_cnt = 0, inc_netinet_cnt = 0;
     int inc_netpacket_cnt = 0, inc_scsi_cnt = 0, inc_sys_cnt = 0;
@@ -270,26 +271,27 @@ static void rd_mkfs(void) {
     const int ino_root = 1;
     const int ino_etc = 2;
     const int ino_bin = 3;
-    const int ino_dev = 4;
-    const int ino_usr = 5;
-    const int ino_console = 6;
-    const int ino_include = 7;
-    const int ino_lib = 8;
-    const int ino_inc_arpa = 9;
-    const int ino_inc_bits = 10;
-    const int ino_inc_net = 11;
-    const int ino_inc_netinet = 12;
-    const int ino_inc_netpacket = 13;
-    const int ino_inc_scsi = 14;
-    const int ino_inc_sys = 15;
-    int next_ino = 16;
+    const int ino_sbin = 4;
+    const int ino_dev = 5;
+    const int ino_usr = 6;
+    const int ino_console = 7;
+    const int ino_include = 8;
+    const int ino_lib = 9;
+    const int ino_inc_arpa = 10;
+    const int ino_inc_bits = 11;
+    const int ino_inc_net = 12;
+    const int ino_inc_netinet = 13;
+    const int ino_inc_netpacket = 14;
+    const int ino_inc_scsi = 15;
+    const int ino_inc_sys = 16;
+    int next_ino = 17;
 
     for (i = 0; rd_files[i].path; i++) {
         file_count++;
     }
 
     /* Size inode table to fit directories + files */
-    int dir_inodes = 15;
+    int dir_inodes = 16;
     int total_inodes = dir_inodes + file_count;
     int inode_bytes = total_inodes * (int)sizeof(struct rd_inode);
     int inode_blocks = (inode_bytes + BSIZE - 1) / BSIZE;
@@ -311,6 +313,8 @@ static void rd_mkfs(void) {
         for (int j = 0; j < 14; j++) root_dir[i].d_name[j] = 0;
         etc_dir[i].d_ino = 0;
         for (int j = 0; j < 14; j++) etc_dir[i].d_name[j] = 0;
+        sbin_dir[i].d_ino = 0;
+        for (int j = 0; j < 14; j++) sbin_dir[i].d_name[j] = 0;
     }
     for (i = 0; i < 32; i++) {
         bin_dir[i].d_ino = 0;
@@ -368,6 +372,13 @@ static void rd_mkfs(void) {
     root_dir[root_cnt].d_name[2] = 'n';
     root_dir[root_cnt].d_name[3] = 0;
     root_cnt++;
+    root_dir[root_cnt].d_ino = ino_sbin;
+    root_dir[root_cnt].d_name[0] = 's';
+    root_dir[root_cnt].d_name[1] = 'b';
+    root_dir[root_cnt].d_name[2] = 'i';
+    root_dir[root_cnt].d_name[3] = 'n';
+    root_dir[root_cnt].d_name[4] = 0;
+    root_cnt++;
     root_dir[root_cnt].d_ino = ino_dev;
     root_dir[root_cnt].d_name[0] = 'd';
     root_dir[root_cnt].d_name[1] = 'e';
@@ -416,6 +427,16 @@ static void rd_mkfs(void) {
     bin_dir[bin_cnt].d_name[1] = '.';
     bin_dir[bin_cnt].d_name[2] = 0;
     bin_cnt++;
+
+    sbin_dir[sbin_cnt].d_ino = ino_sbin;
+    sbin_dir[sbin_cnt].d_name[0] = '.';
+    sbin_dir[sbin_cnt].d_name[1] = 0;
+    sbin_cnt++;
+    sbin_dir[sbin_cnt].d_ino = ino_root;
+    sbin_dir[sbin_cnt].d_name[0] = '.';
+    sbin_dir[sbin_cnt].d_name[1] = '.';
+    sbin_dir[sbin_cnt].d_name[2] = 0;
+    sbin_cnt++;
 
     dev_dir[dev_cnt].d_ino = ino_dev;
     dev_dir[dev_cnt].d_name[0] = '.';
@@ -660,6 +681,14 @@ static void rd_mkfs(void) {
                 if (name[j] == 0) break;
             }
             bin_cnt++;
+        } else if (rf->path[0] == '/' && rf->path[1] == 's' && rf->path[2] == 'b' && rf->path[3] == 'i' && rf->path[4] == 'n' && rf->path[5] == '/') {
+            sbin_dir[sbin_cnt].d_ino = next_ino;
+            for (j = 0; j < 14; j++) sbin_dir[sbin_cnt].d_name[j] = 0;
+            for (j = 0; j < 14; j++) {
+                sbin_dir[sbin_cnt].d_name[j] = name[j];
+                if (name[j] == 0) break;
+            }
+            sbin_cnt++;
         } else if (rf->path[0] == '/' && rf->path[1] == 'l' && rf->path[2] == 'i' && rf->path[3] == 'b' && rf->path[4] == '/') {
             lib_dir[lib_cnt].d_ino = next_ino;
             for (j = 0; j < 14; j++) lib_dir[lib_cnt].d_name[j] = 0;
@@ -754,6 +783,7 @@ static void rd_mkfs(void) {
     rd_write_dir_inode(&dip[ino_root - 1], root_dir, root_cnt, &data_block);
     rd_write_dir_inode(&dip[ino_etc - 1], etc_dir, etc_cnt, &data_block);
     rd_write_dir_inode(&dip[ino_bin - 1], bin_dir, bin_cnt, &data_block);
+    rd_write_dir_inode(&dip[ino_sbin - 1], sbin_dir, sbin_cnt, &data_block);
     rd_write_dir_inode(&dip[ino_dev - 1], dev_dir, dev_cnt, &data_block);
     rd_write_dir_inode(&dip[ino_usr - 1], usr_dir, usr_cnt, &data_block);
     rd_write_dir_inode(&dip[ino_include - 1], include_dir, include_cnt, &data_block);
@@ -770,8 +800,13 @@ static void rd_mkfs(void) {
     dip[ino_etc - 1].i_size1 = (uint16_t)(etc_cnt * sizeof(struct v6_direct));
     dip[ino_bin - 1].i_size0 = 0;
     dip[ino_bin - 1].i_size1 = (uint16_t)(bin_cnt * sizeof(struct v6_direct));
+    dip[ino_sbin - 1].i_mode = IALLOC | IFDIR | 0755;
+    dip[ino_sbin - 1].i_nlink = 2;
+    dip[ino_sbin - 1].i_size0 = 0;
+    dip[ino_sbin - 1].i_size1 = (uint16_t)(sbin_cnt * sizeof(struct v6_direct));
     rd_write_dir(dip[ino_etc - 1].i_addr[0], etc_dir, etc_cnt);
     rd_write_dir(dip[ino_bin - 1].i_addr[0], bin_dir, bin_cnt);
+    rd_write_dir(dip[ino_sbin - 1].i_addr[0], sbin_dir, sbin_cnt);
 
     int nfree = 0;
     for (daddr_t b = data_block; b < RAMDISK_BLOCKS && nfree < NICFREE; b++) {

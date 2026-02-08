@@ -315,7 +315,7 @@ loop:
     }
     
     // if (curproc && curproc->p_pid == 2) {
-    //     printf("swtch: resumed shell (pid 2)\n");
+    //     kprintf("swtch: resumed shell (pid 2)\n");
     // }
     
     spl0();
@@ -406,7 +406,7 @@ void expand(int newsize) {
     a1 = malloc(coremap, newsize);
     if (a1 == 0) {
         /* No space */
-        printf("expand: out of memory (req %d)\n", newsize);
+        kprintf("expand: out of memory (req %d)\n", newsize);
         /* Simple wait? No, V6 swaps. Here we panic or error. */
         u.u_error = ENOMEM;
         return;

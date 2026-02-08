@@ -7,8 +7,17 @@
 .section .multiboot, "a"
     .align 4
     .long 0x1BADB002            /* MULTIBOOT_HEADER_MAGIC */
-    .long 0x00000003            /* MULTIBOOT_HEADER_FLAGS (align + meminfo) */
-    .long -(0x1BADB002 + 0x00000003)  /* Checksum */
+    .long 0x00000007            /* MULTIBOOT_HEADER_FLAGS (align + meminfo + video) */
+    .long -(0x1BADB002 + 0x00000007)  /* Checksum */
+    
+    /* Address fields (unused) */
+    .long 0, 0, 0, 0, 0
+
+    /* Graphics Request */
+    .long 0     /* Mode: 0=Linear Graphics */
+    .long 1024  /* Width */
+    .long 768   /* Height */
+    .long 32    /* Depth */
 
 /* BSS Section - Uninitialized Data */
 .section .bss
@@ -69,18 +78,24 @@ _start:
     movl $kernel_stack_top, %esp
     xorl %ebp, %ebp
     
+    /* Save Multiboot arguments to be used by kmain later
+       Stack: [ESP+4] = Magic, [ESP+8] = Info
+    */
+    pushl %ebx  /* Multiboot Info Address (2nd arg) */
+    pushl %eax  /* Multiboot Magic (1st arg) */
+    
     /* Load our GDT */
     lgdt gdt_descriptor
     
     /* Reload segment registers with new GDT */
     ljmp $0x08, $.reload_cs
 .reload_cs:
-    movw $0x10, %ax
-    movw %ax, %ds
-    movw %ax, %es
-    movw %ax, %fs
-    movw %ax, %gs
-    movw %ax, %ss
+    movw $0x10, %cx
+    movw %cx, %ds
+    movw %cx, %es
+    movw %cx, %fs
+    movw %cx, %gs
+    movw %cx, %ss
     
     /* Initialize IDT with default handlers */
     call setup_idt
@@ -88,6 +103,8 @@ _start:
     /* Load IDT */
     lidt idt_descriptor
     
+    /* Arguments already on stack */
+
     /* Call the main C function */
     call kmain
     

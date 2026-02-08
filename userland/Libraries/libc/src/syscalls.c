@@ -495,6 +495,11 @@ int getppid(void) {
     return (int)syscall0(SYS_GETPPID);
 }
 
+
 int getpgrp(void) {
     return (int)syscall0(SYS_GETPGRP);
+}
+
+int getfbinfo(void *info) {
+    return (int)syscall1(SYS_GETFBINFO, (long)info);
 }

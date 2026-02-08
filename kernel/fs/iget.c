@@ -20,7 +20,7 @@ extern struct inode inode[];
 extern struct mount mount[];
 extern struct user u;
 extern time_t time[];
-extern void printf(const char *fmt, ...);
+extern void kprintf(const char *fmt, ...);
 extern void panic(const char *msg);
 extern void sleep(void *chan, int pri);
 extern void wakeup(void *chan);
@@ -85,7 +85,7 @@ loop:
     
     /* Not found in cache - allocate empty slot */
     if (empty == NULL) {
-        printf("Inode table overflow\n");
+        kprintf("Inode table overflow\n");
         u.u_error = ENFILE;
         return NULL;
     }

@@ -9,7 +9,7 @@
 #include <unix/user.h>
 #include <unix/tty.h>
 
-extern void printf(const char *fmt, ...);
+extern void kprintf(const char *fmt, ...);
 extern void sleep(void *chan, int pri);
 extern void wakeup(void *chan);
 extern void pgsignal(int pgid, int sig);

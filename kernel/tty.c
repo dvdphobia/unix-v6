@@ -21,7 +21,7 @@ extern struct user u;
 extern struct file *getf(int fd);
 extern struct cdevsw cdevsw[];
 extern int nchrdev;
-extern void printf(const char *fmt, ...);
+extern void kprintf(const char *fmt, ...);
 extern void sleep(void *chan, int pri);
 extern void wakeup(void *chan);
 extern int fuword(caddr_t addr);
@@ -92,7 +92,7 @@ void cinit(void) {
     struct cblock *cp;
     int i;
     
-    printf("cinit: initializing character lists...\n");
+    kprintf("cinit: initializing character lists...\n");
     
     /* Initialize free list */
     cfreelist = NULL;
@@ -130,7 +130,7 @@ void cinit(void) {
     cons_tty.t_outq.c_cl = NULL;
     
     (void)maptab;
-    printf("cinit: %d character devices, %d cblocks\n", nchrdev, NCLIST);
+    kprintf("cinit: %d character devices, %d cblocks\n", nchrdev, NCLIST);
 }
 
 /*

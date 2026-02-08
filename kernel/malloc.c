@@ -58,11 +58,11 @@ void mfree(uint32_t *pmap, int size, uint32_t addr) {
     register int t;
 
     bp = mp;
-    for (; bp->m_addr <= addr && bp->m_size != 0; bp++);
+    for (; (uint32_t)bp->m_addr <= addr && bp->m_size != 0; bp++);
     
-    if (bp > mp && (bp-1)->m_addr + (bp-1)->m_size == addr) {
+    if (bp > mp && (uint32_t)((bp-1)->m_addr + (bp-1)->m_size) == addr) {
         (bp-1)->m_size += size;
-        if (addr + size == bp->m_addr) {
+        if (addr + size == (uint32_t)bp->m_addr) {
             (bp-1)->m_size += bp->m_size;
             while (bp->m_size) {
                 bp++;
@@ -71,7 +71,7 @@ void mfree(uint32_t *pmap, int size, uint32_t addr) {
             }
         }
     } else {
-        if (addr + size == bp->m_addr && bp->m_size) {
+        if (addr + size == (uint32_t)bp->m_addr && bp->m_size) {
             bp->m_addr -= size;
             bp->m_size += size;
         } else if (size) {

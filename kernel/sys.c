@@ -53,7 +53,7 @@ extern struct file file[];
 extern time_t time[];
 extern int mpid;
 extern int execnt;
-extern void printf(const char *fmt, ...);
+extern void kprintf(const char *fmt, ...);
 extern struct inode *namei(int (*func)(void), int flag);
 extern struct inode *iget(dev_t dev, ino_t ino);
 extern void iput(struct inode *ip);
@@ -190,7 +190,7 @@ int sysopen(void) {
     if (ip == NULL) {
         /* Only print if u_error is unexpected? ENOENT (2) is common. */
         if (u.u_error != ENOENT) {
-            printf("open: namei failed u_error=%d\n", u.u_error);
+            kprintf("open: namei failed u_error=%d\n", u.u_error);
         }
         return -1;
     }
@@ -550,7 +550,7 @@ int getcwd(void) {
         offset = 0;
         int pino = 0;
         
-        while (offset < (ip->i_size1 + (ip->i_size0 << 16)) && !found) {
+        while ((uint32_t)offset < ((uint32_t)ip->i_size1 + ((uint32_t)ip->i_size0 << 16)) && !found) {
             bp = bread(ip->i_dev, bmap(ip, offset >> 9, 0));
             if (u.u_error) {
                 iput(ip);
@@ -569,8 +569,8 @@ int getcwd(void) {
             char *blk_addr = bp->b_addr;
             int blk_offset = 0;
             
-            while (blk_offset < 512 && offset + blk_offset < 
-                   (ip->i_size1 + (ip->i_size0 << 16))) {
+            while (blk_offset < 512 && (uint32_t)(offset + blk_offset) < 
+                   ((uint32_t)ip->i_size1 + ((uint32_t)ip->i_size0 << 16))) {
                 ino_ptr = (ino_t *)(blk_addr + blk_offset);
                 name_ptr = blk_addr + blk_offset + 2;
                 
@@ -607,7 +607,7 @@ int getcwd(void) {
         found = 0;
         offset = 0;
         
-        while (offset < (parent->i_size1 + (parent->i_size0 << 16)) && !found) {
+        while ((uint32_t)offset < ((uint32_t)parent->i_size1 + ((uint32_t)parent->i_size0 << 16)) && !found) {
             bp = bread(parent->i_dev, bmap(parent, offset >> 9, 0));
             if (u.u_error) {
                 iput(ip);
@@ -629,8 +629,8 @@ int getcwd(void) {
             char *blk_addr = bp->b_addr;
             int blk_offset = 0;
             
-            while (blk_offset < 512 && offset + blk_offset < 
-                   (parent->i_size1 + (parent->i_size0 << 16))) {
+            while (blk_offset < 512 && (uint32_t)(offset + blk_offset) < 
+                   ((uint32_t)parent->i_size1 + ((uint32_t)parent->i_size0 << 16))) {
                 ino_ptr = (ino_t *)(blk_addr + blk_offset);
                 name_ptr = blk_addr + blk_offset + 2;
                 
@@ -2987,7 +2987,7 @@ static int fd_read_ready(int fd) {
         return -1;
     if (fp->f_flag & FPIPE) {
         struct inode *ip = fp->f_inode;
-        if (ip->i_size1 != fp->f_offset[1]) {
+        if ((off_t)ip->i_size1 != fp->f_offset[1]) {
             return 1;
         }
         /* If no writers, read will return EOF */

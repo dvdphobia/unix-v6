@@ -25,8 +25,9 @@ ASM_OBJS      = $(ASM_SRCS:.S=.o)
 
 # Source files - C (ported from original V6)
 # Kernel core
-CORE_SRCS     = core/main.c core/trap.c core/sysent.c core/sig.c core/sys.c \
-                core/tty.c core/malloc.c core/clock.c core/pipe.c core/text.c
+CORE_SRCS     = main.c trap.c sysent.c sig.c sys.c \
+                tty.c malloc.c clock.c pipe.c text.c \
+                sys_fb.c prf.c
 
 # Filesystem
 FS_SRCS       = fs/bio.c fs/alloc.c fs/iget.c fs/nami.c fs/fio.c fs/rdwri.c
@@ -35,7 +36,7 @@ FS_SRCS       = fs/bio.c fs/alloc.c fs/iget.c fs/nami.c fs/fio.c fs/rdwri.c
 SCHED_SRCS    = sched/slp.c
 
 # Drivers
-DRIVER_SRCS   = drivers/block/ramdisk.c drivers/block/ide.c drivers/char/console.c
+DRIVER_SRCS   = drivers/block/ramdisk.c drivers/block/ide.c drivers/char/console.c drivers/char/fb.c
 
 C_SRCS        = $(CORE_SRCS) $(FS_SRCS) $(SCHED_SRCS) $(DRIVER_SRCS)
 C_OBJS        = $(C_SRCS:.c=.o)
@@ -103,7 +104,7 @@ $(KERNEL_ELF): $(OBJS)
 iso: toolchain $(KERNEL_ELF)
 	@mkdir -p isodir/boot/grub
 	@cp $(KERNEL_ELF) isodir/boot/kernel.elf
-	@cp grub.cfg isodir/boot/grub/grub.cfg
+	@cp arch/x86/grub.cfg isodir/boot/grub/grub.cfg
 	@$(GRUB_MKRESCUE) -o $(ISO_FILE) isodir 2>/dev/null
 	@echo "ISO created: $(ISO_FILE)"
 
@@ -111,9 +112,9 @@ iso: toolchain $(KERNEL_ELF)
 run: toolchain iso
 	qemu-system-i386 -cdrom $(ISO_FILE) -m 64M -serial stdio -display none
 
-# Run in QEMU with VGA display
+# Run in QEMU with VGA display (Auto-detect)
 run-vga: toolchain iso
-	qemu-system-i386 -cdrom $(ISO_FILE) -m 64M
+	qemu-system-i386 -cdrom $(ISO_FILE) -m 64M -serial stdio
 
 # Debug in QEMU with GDB
 debug: toolchain iso

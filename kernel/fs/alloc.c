@@ -23,7 +23,7 @@ extern struct bdevsw bdevsw[];
 extern dev_t rootdev;
 extern time_t time[];
 extern int updlock;
-extern void printf(const char *fmt, ...);
+extern void kprintf(const char *fmt, ...);
 extern void prdev(const char *msg, dev_t dev);
 extern void panic(const char *msg);
 extern void sleep(void *chan, int pri);
@@ -46,12 +46,12 @@ void iinit(void) {
     struct buf *bp, *cp;
     struct filsys *fp;
     
-    printf("iinit: initializing root filesystem...\n");
+    kprintf("iinit: initializing root filesystem...\n");
     
     /* Check if any block devices are configured */
     extern int nblkdev;
     if (nblkdev == 0) {
-        printf("iinit: no block devices configured, skipping root fs\n");
+        kprintf("iinit: no block devices configured, skipping root fs\n");
         time[0] = 0;
         time[1] = 0;
         return;
@@ -66,7 +66,7 @@ void iinit(void) {
     bp = bread(rootdev, 1);
     if (bp == NULL || (bp->b_flags & B_ERROR)) {
         if (bp) brelse(bp);
-        printf("iinit: WARNING - cannot read superblock, using stub fs\n");
+        kprintf("iinit: WARNING - cannot read superblock, using stub fs\n");
         time[0] = 0;
         time[1] = 0;
         return;
@@ -91,7 +91,7 @@ void iinit(void) {
     time[0] = fp->s_time[0];
     time[1] = fp->s_time[1];
     
-    printf("iinit: root filesystem initialized\n");
+    kprintf("iinit: root filesystem initialized\n");
 }
 
 /*

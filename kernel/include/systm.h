@@ -98,8 +98,10 @@ extern char regloc[];
  * System function prototypes
  */
 void panic(const char *msg);
-void printf(const char *fmt, ...);
+void kprintf(const char *fmt, ...);
 void prdev(const char *msg, dev_t dev);
+void serial_init(void);
+void vga_clear(void);
 void wakeup(void *chan);
 void sleep(void *chan, int pri);
 void setrun(struct proc *p);

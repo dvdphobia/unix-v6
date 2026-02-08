@@ -30,6 +30,11 @@ extern void itrunc(struct inode *ip);
 extern void iput(struct inode *ip);
 extern int schar(void);
 
+/* Forward declarations */
+void stop(void);
+int core(void);
+int procxmt(void);
+
 /* Priority for tracing */
 #define IPCPRI  (-1)
 
@@ -243,7 +248,7 @@ void psig(void) {
  */
 int core(void) {
     struct inode *ip;
-    uint32_t s;
+    /* uint32_t s; */
     
     u.u_error = 0;
     u.u_dirp = (caddr_t)"core";
@@ -280,7 +285,7 @@ int core(void) {
     writei(ip);
     
     /* TODO: Write data and stack segments */
-    s = u.u_procp->p_size;
+    /* s = u.u_procp->p_size; */
     /* Would need to write process memory here */
     
     iput(ip);

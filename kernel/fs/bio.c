@@ -21,7 +21,7 @@ extern struct buf bfreelist;
 extern struct buf swbuf;
 extern struct bdevsw bdevsw[];
 extern struct user u;
-extern void printf(const char *fmt, ...);
+extern void kprintf(const char *fmt, ...);
 extern void sleep(void *chan, int pri);
 extern void wakeup(void *chan);
 extern int nblkdev;  /* Defined in main.c */
@@ -439,7 +439,7 @@ void binit(void) {
     struct buf *bp;
     int i;
     
-    printf("binit: initializing buffer cache...\n");
+    kprintf("binit: initializing buffer cache...\n");
     
     /* Initialize free list as doubly-linked circular list */
     bfreelist.b_forw = &bfreelist;
@@ -475,7 +475,7 @@ void binit(void) {
         nblkdev++;
     }
     
-    printf("binit: %d buffers of %d bytes, %d block devices\n", 
+    kprintf("binit: %d buffers of %d bytes, %d block devices\n", 
            NBUF, BSIZE, nblkdev);
 }
 

@@ -37,6 +37,7 @@ int seek(void);
 int getpid(void);
 int smount(void);
 int sumount(void);
+int getfbinfo(void);
 int setuid(void);
 int getuid(void);
 int stime(void);
@@ -221,7 +222,7 @@ struct sysent sysent[] = {
     { 0, sync },            /* 36 = sync */
     { 1, kill },            /* 37 = kill */
     { 0, getswit },         /* 38 = switch */
-    { 0, nosys },           /* 39 = x */
+    { 1, getfbinfo },       /* 39 = getfbinfo */
     { 0, nosys },           /* 40 = x */
     { 0, dup },             /* 41 = dup */
     { 0, syspipe },         /* 42 = pipe */

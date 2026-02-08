@@ -211,7 +211,12 @@ int conread(dev_t dev) {
         }
 
         /* Echo typed characters for simple user shell interaction */
+        /* Echo typed characters for simple user shell interaction */
         if (echo) {
+            if (c == '\n' && (con_termios.c_oflag & OFLAG_OPOST) && (con_termios.c_oflag & OFLAG_ONLCR)) {
+                vga_putchar('\r');
+                serial_putchar('\r');
+            }
             vga_putchar(c);
             serial_putchar(c);
         }

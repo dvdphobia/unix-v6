@@ -8,6 +8,7 @@
 
 #include "include/types.h"
 #include "include/param.h"
+#include "include/multiboot.h"
 #include "include/user.h"
 #include "include/systm.h"
 #include "include/proc.h"
@@ -23,18 +24,7 @@
  * to bring up the system.
  * Execs /etc/init
  */
-static uint8_t icode[] = {
-    0xb8, 0x0b, 0x00, 0x00, 0x00,  /* mov eax, 11 (exec) */
-    0xbb, 0x14, 0x00, 0x00, 0x00,  /* mov ebx, 20 (addr of path) */
-    0xb9, 0x20, 0x00, 0x00, 0x00,  /* mov ecx, 32 (addr of argv) */
-    0xcd, 0x80,                    /* int 0x80 */
-    0xeb, 0xfe,                    /* jmp $ */
-    0x00,                          /* padding */
-    '/', 'e', 't', 'c', '/', 'i', 'n', 'i', 't', 0,
-    0x00, 0x00,
-    0x14, 0x00, 0x00, 0x00,        /* argv[0] */
-    0x00, 0x00, 0x00, 0x00         /* argv[1] */
-};
+/* int icode[] (removed unused) */
 
 /*
  * Global kernel data structures
@@ -111,8 +101,7 @@ int nchrdev = 0;    /* Number of character devices */
 /* Serial port (COM1) for terminal output */
 #define COM1_PORT   0x3F8
 
-static int vga_row = 0;
-static int vga_col = 0;
+/* Console implementation moved to core/prf.c */
 
 /* External I/O functions from x86.S */
 extern void outb(uint16_t port, uint8_t val);
@@ -149,223 +138,6 @@ static void pic_init(void) {
     outb(0xA1, 0x00);
 }
 
-/* Initialize serial port COM1 */
-static void serial_init(void) {
-    outb(COM1_PORT + 1, 0x01);    /* Enable interrupts (Data Available only) */
-    outb(COM1_PORT + 3, 0x80);    /* Enable DLAB */
-    outb(COM1_PORT + 0, 0x01);    /* Divisor low byte (115200 baud) */
-    outb(COM1_PORT + 1, 0x00);    /* Divisor high byte */
-    outb(COM1_PORT + 3, 0x03);    /* 8 bits, no parity, one stop bit */
-    outb(COM1_PORT + 2, 0xC7);    /* Enable FIFO */
-    outb(COM1_PORT + 4, 0x0B);    /* IRQs enabled, RTS/DSR set */
-}
-
-/* Write a character to serial port */
-void serial_putchar(char c) {
-    /* Wait for transmit buffer empty */
-    while ((inb(COM1_PORT + 5) & 0x20) == 0);
-    outb(COM1_PORT, c);
-}
-
-static void serial_puts(const char *s) {
-    while (*s) {
-        if (*s == '\n') serial_putchar('\r');
-        serial_putchar(*s++);
-    }
-}
-
-static void vga_scroll(void) {
-    for (int i = 0; i < (VGA_HEIGHT - 1) * VGA_WIDTH; i++) {
-        VGA_BUFFER[i] = VGA_BUFFER[i + VGA_WIDTH];
-    }
-    for (int i = (VGA_HEIGHT - 1) * VGA_WIDTH; i < VGA_HEIGHT * VGA_WIDTH; i++) {
-        VGA_BUFFER[i] = VGA_WHITE | ' ';
-    }
-}
-
-void vga_putchar(char c) {
-    /* Sanity check - should never happen but prevents divide by zero */
-    if (VGA_WIDTH == 0 || VGA_HEIGHT == 0) {
-        return;
-    }
-    
-    if (c == '\n') {
-        vga_col = 0;
-        vga_row++;
-    } else if (c == '\r') {
-        vga_col = 0;
-    } else if (c == '\t') {
-        vga_col = (vga_col + 8) & ~7;
-    } else {
-        VGA_BUFFER[vga_row * VGA_WIDTH + vga_col] = VGA_WHITE | (uint8_t)c;
-        vga_col++;
-    }
-    
-    if (vga_col >= VGA_WIDTH) {
-        vga_col = 0;
-        vga_row++;
-    }
-    
-    while (vga_row >= VGA_HEIGHT) {
-        vga_scroll();
-        vga_row--;
-    }
-}
-
-void vga_clear(void) {
-    for (int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
-        VGA_BUFFER[i] = VGA_WHITE | ' ';
-    }
-    vga_row = 0;
-    vga_col = 0;
-}
-
-static void vga_puts(const char *s) {
-    while (*s) {
-        vga_putchar(*s++);
-    }
-}
-
-/*
- * Console output - writes to both VGA and serial
- */
-static void console_puts(const char *s) {
-    vga_puts(s);
-    serial_puts(s);
-}
-
-/*
- * Simplified printf for kernel messages
- * Supports: %d, %x, %s, %c
- */
-static void print_int(int n) {
-    char buf[12];
-    int i = 0;
-    int neg = 0;
-    
-    if (n < 0) {
-        neg = 1;
-        n = -n;
-    }
-    if (n == 0) {
-        serial_putchar('0');
-        vga_putchar('0');
-        return;
-    }
-    while (n > 0) {
-        buf[i++] = '0' + (n % 10);
-        n /= 10;
-    }
-    if (neg) {
-        serial_putchar('-');
-        vga_putchar('-');
-    }
-    while (--i >= 0) {
-        serial_putchar(buf[i]);
-        vga_putchar(buf[i]);
-    }
-}
-
-static void print_hex(unsigned int n) {
-    char buf[9];
-    int i = 0;
-    const char *hex = "0123456789abcdef";
-    
-    if (n == 0) {
-        serial_putchar('0');
-        vga_putchar('0');
-        return;
-    }
-    while (n > 0) {
-        buf[i++] = hex[n & 0xf];
-        n >>= 4;
-    }
-    while (--i >= 0) {
-        serial_putchar(buf[i]);
-        vga_putchar(buf[i]);
-    }
-}
-
-void printf(const char *fmt, ...) {
-    __builtin_va_list ap;
-    __builtin_va_start(ap, fmt);
-    
-    while (*fmt) {
-        if (*fmt == '%') {
-            fmt++;
-            /* Skip width and alignment specifiers */
-            int left_align = 0;
-            int width = 0;
-            if (*fmt == '-') {
-                left_align = 1;
-                fmt++;
-            }
-            while (*fmt >= '0' && *fmt <= '9') {
-                width = width * 10 + (*fmt - '0');
-                fmt++;
-            }
-            (void)left_align; /* Not implemented yet */
-            (void)width;      /* Not implemented yet */
-            
-            switch (*fmt) {
-            case 'd':
-                print_int(__builtin_va_arg(ap, int));
-                break;
-            case 'x':
-                print_hex(__builtin_va_arg(ap, unsigned int));
-                break;
-            case 's': {
-                const char *s = __builtin_va_arg(ap, const char *);
-                if (s) console_puts(s);
-                break;
-            }
-            case 'c':
-                serial_putchar(__builtin_va_arg(ap, int));
-                vga_putchar(__builtin_va_arg(ap, int));
-                break;
-            case '%':
-                serial_putchar('%');
-                vga_putchar('%');
-                break;
-            default:
-                serial_putchar('%');
-                vga_putchar('%');
-                serial_putchar(*fmt);
-                vga_putchar(*fmt);
-                break;
-            }
-        } else {
-            if (*fmt == '\n') serial_putchar('\r');
-            serial_putchar(*fmt);
-            vga_putchar(*fmt);
-        }
-        fmt++;
-    }
-    __builtin_va_end(ap);
-}
-
-/*
- * panic - Print message and halt system
- * Original V6 function from prf.c
- */
-void panic(const char *msg) {
-    console_puts("\n\npanic: ");
-    console_puts(msg);
-    console_puts("\n");
-    
-    /* Halt the CPU */
-    for (;;) {
-        __asm__ __volatile__("cli; hlt");
-    }
-}
-
-/*
- * prdev - Print device error message
- */
-void prdev(const char *msg, dev_t dev) {
-    printf("%s on dev %d/%d\n", msg, major(dev), minor(dev));
-}
-
 /*
  * Null device functions
  */
@@ -397,7 +169,7 @@ static void detect_memory(void) {
      */
     maxmem = (16 * 1024 * 1024) / 64;  /* In 64-byte units like V6 */
     
-    printf("mem = %d KB\n", (maxmem * 64) / 1024);
+    kprintf("mem = %d KB\n", (maxmem * 64) / 1024);
     
     /* Limit to MAXMEM if larger */
     if (maxmem > MAXMEM) {
@@ -410,7 +182,7 @@ static void detect_memory(void) {
  * Replaces V6's clock detection
  */
 static void setup_clock(void) {
-    printf("clock: initializing PIT timer...\n");
+    kprintf("clock: initializing PIT timer...\n");
     
     /* Program PIT channel 0 for HZ interrupts per second */
     /* PIT frequency is 1193182 Hz */
@@ -420,7 +192,7 @@ static void setup_clock(void) {
     outb(0x40, divisor & 0xFF);     /* Low byte */
     outb(0x40, divisor >> 8);       /* High byte */
     
-    printf("clock: timer running at %d Hz\n", HZ);
+    kprintf("clock: timer running at %d Hz\n", HZ);
 }
 
 /*
@@ -435,9 +207,9 @@ static void setup_clock(void) {
  *  - Fork process 1 (init)
  *  - Enter scheduler loop
  */
-/* Storage for Process 1 (init) */
-static struct user p1_u;
-static uint8_t p1_stack[4096];
+/* Storage for Process 1 (init) - dynamically allocated now */
+/* static struct user p1_u; */
+/* static uint8_t p1_stack[4096]; */
 
 extern int kbd_getc(void);
 
@@ -484,7 +256,7 @@ static void proc0_main(void) {
     /*
      * Phase 5: Create init process and enter scheduler
      */
-    printf("\nBootstraping /etc/init...\n");
+    kprintf("\nBootstraping /etc/init...\n");
     
     /* 
      * Manually setup process 1
@@ -541,14 +313,14 @@ static void proc0_main(void) {
         u.u_ar0 = frame;
         
         /* Set up exec arguments */
-        u.u_arg[0] = (int)"/etc/init";
+        u.u_arg[0] = (int)"/sbin/init";
         u.u_arg[1] = 0;  /* No argv for now */
         
         /* Call exec - it will set up EIP and UESP in the frame via u.u_ar0 */
         exec();
         
         if (u.u_error) {
-            printf("init: exec failed, error=%d\n", u.u_error);
+            kprintf("init: exec failed, error=%d\n", u.u_error);
             for(;;);
         }
         
@@ -560,12 +332,12 @@ static void proc0_main(void) {
         panic("return_to_user failed in init");
     }
 
-    printf("\n");
-    printf("======================================\n");
-    printf("Unix V6 x86 kernel initialization complete\n");
-    printf("======================================\n\n");
+    kprintf("\n");
+    kprintf("======================================\n");
+    kprintf("Unix V6 x86 kernel initialization complete\n");
+    kprintf("======================================\n\n");
 
-    printf("Entering scheduler...\n");
+    kprintf("Entering scheduler...\n");
     
     /* Enter scheduler loop (as Process 0) */
     /* Call swtch() directly - let P1 run */
@@ -577,11 +349,17 @@ static void proc0_main(void) {
     panic("scheduler returned");
 }
 
-void kmain(void) {
+void kmain(uint32_t magic, multiboot_info_t *mbi) {
     int i;
     
     /* Initialize PIC */
     pic_init();
+
+    /* Check for Multiboot Video */
+    /* Check for Multiboot Video */
+    if (magic == MULTIBOOT_BOOTLOADER_MAGIC && (mbi->flags & (1 << 12))) {
+        fb_init(mbi);
+    }
 
     /* Initialize serial port first for early debug output */
     serial_init();
@@ -593,14 +371,14 @@ void kmain(void) {
     setup_tss();
     
     /* Print banner */
-    printf("Unix V6 x86 Port\n");
-    printf("================\n");
-    printf("Ported from PDP-11 to x86 architecture\n\n");
+    kprintf("Unix V6 x86 Port\n");
+    kprintf("================\n");
+    kprintf("Ported from PDP-11 to x86 architecture\n\n");
     
     /*
      * Phase 1: Hardware initialization
      */
-    printf("Initializing hardware...\n");
+    kprintf("Initializing hardware...\n");
     
     /* Detect and configure memory */
     detect_memory();
@@ -625,7 +403,7 @@ void kmain(void) {
     /* Free the available memory into the map */
     mfree(coremap, free_mem, mem_start);
     
-    printf("Memory map initialized: start=%x size=%d clicks (%d KB)\n", 
+    kprintf("Memory map initialized: start=%x size=%d clicks (%d KB)\n", 
            mem_start, free_mem, (free_mem * 64) / 1024);
     
     /* Initialize clock */
@@ -635,7 +413,7 @@ void kmain(void) {
      * Phase 2: Setup process 0 (swapper/scheduler)
      * From original V6 main.c
      */
-    printf("\nSetting up process 0 (swapper)...\n");
+    kprintf("\nSetting up process 0 (swapper)...\n");
     
     /* Clear process table */
     for (i = 0; i < NPROC; i++) {
@@ -670,13 +448,13 @@ void kmain(void) {
     /* Link user structure to process */
     u.u_procp = &proc[0];
     
-    printf("Process 0 initialized: addr=%x size=%d\n", 
+    kprintf("Process 0 initialized: addr=%x size=%d\n", 
            proc[0].p_addr, proc[0].p_size);
     
     /*
      * Phase 3: Initialize kernel subsystems
      */
-    printf("\nInitializing kernel subsystems...\n");
+    kprintf("\nInitializing kernel subsystems...\n");
     
     /* Initialize ramdisk FIRST - before binit */
     extern void rd_init(void);
@@ -701,7 +479,7 @@ void kmain(void) {
     /*
      * Phase 4: Get root directory
      */
-    printf("\nRoot filesystem initialization...\n");
+    kprintf("\nRoot filesystem initialization...\n");
 
     /* Mount root */
     rootdev = 0;  /* Ramdisk is major 0 */
@@ -721,7 +499,7 @@ void kmain(void) {
     }
     prele(u.u_cdir);  /* Unlock but keep reference */
     
-    printf("Root mounted. rootdir=%x u.u_cdir=%x i_count=%d\n", 
+    kprintf("Root mounted. rootdir=%x u.u_cdir=%x i_count=%d\n", 
            rootdir, u.u_cdir, rootdir->i_count);
 
     /* 
@@ -753,7 +531,7 @@ void kmain(void) {
             /* We assigned it 3 times, let's bump count */
             fp->f_count = 3; 
             
-            printf("Console opened on fd 0,1,2\n");
+            kprintf("Console opened on fd 0,1,2\n");
         } else {
             iput(cp);
         }
@@ -792,7 +570,7 @@ int estabur(int nt, int nd, int ns, int sep) {
          */
     }
     
-    if (nt + nd + ns + USIZE > maxmem) {
+    if ((uint32_t)(nt + nd + ns + USIZE) > maxmem) {
         u.u_error = ENOMEM;
         return -1;
     }

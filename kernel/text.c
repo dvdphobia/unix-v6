@@ -11,7 +11,7 @@
 #include "include/inode.h"
 #include "include/text.h"
 
-extern void printf(const char *fmt, ...);
+extern void kprintf(const char *fmt, ...);
 extern void sleep(void *chan, int pri);
 extern void wakeup(void *chan);
 extern void iput(struct inode *ip);
@@ -42,7 +42,7 @@ struct text *xalloc(struct inode *ip) {
     
     /* No existing copy - allocate new slot */
     if (xp1 == NULL) {
-        printf("text table overflow\n");
+        kprintf("text table overflow\n");
         return NULL;
     }
     

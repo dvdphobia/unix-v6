@@ -21,7 +21,7 @@ CRT_END       = $(BUILD_DIR)/crtend.o $(BUILD_DIR)/crtn.o
 LIBC_LIBS     = $(LIBC)
 
 # Programs
-PROGS         = init sh ls cat echo pwd hello netdemo ps uname clear help pwd_test tcc mkdir rm cp
+PROGS         = init sh ls cat echo pwd hello netdemo ps uname clear help pwd_test tcc mkdir rm cp winserver gui
 
 BIN_SRCS      = $(addprefix Utilities/,ls.c cat.c echo.c pwd.c hello.c netdemo.c ps.c uname.c clear.c help.c pwd_test.c tcc.c mkdir.c rm.c cp.c)
 
@@ -42,7 +42,9 @@ OBJS          = \
                 $(BUILD_DIR)/tcc.o \
                 $(BUILD_DIR)/mkdir.o \
                 $(BUILD_DIR)/rm.o \
-                $(BUILD_DIR)/cp.o
+                $(BUILD_DIR)/cp.o \
+                $(BUILD_DIR)/winserver.o \
+                $(BUILD_DIR)/gui.o
 
 # ... (omitted)
 
@@ -96,11 +98,11 @@ $(BUILD_DIR):
 
 
 # Build program object files
-$(BUILD_DIR)/init.o: init.c | $(BUILD_DIR)
+$(BUILD_DIR)/init.o: Init/init.c | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/sh.o: sh.c | $(BUILD_DIR)
+$(BUILD_DIR)/sh.o: Shell/sh.c | $(BUILD_DIR)
 	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
@@ -176,6 +178,14 @@ $(BUILD_DIR)/%.elf: $(BUILD_DIR)/%.o $(CRT_START) $(LIBC) $(CRT_END) linker.ld
 $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf
 	@echo "BIN $@"
 	@$(OBJCOPY) -O binary $< $@
+
+$(BUILD_DIR)/winserver.o: WindowServer/main.c | $(BUILD_DIR)
+	@echo "CC  $<"
+	@$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/gui.o: Utilities/gui.c | $(BUILD_DIR)
+	@echo "CC  $<"
+	@$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
 	@$(MAKE) -C Applications clean

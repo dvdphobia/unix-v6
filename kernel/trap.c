@@ -17,7 +17,7 @@
 extern struct proc proc[];
 extern struct user u;
 extern int8_t runrun;
-extern void printf(const char *fmt, ...);
+extern void kprintf(const char *fmt, ...);
 extern int issig(void);
 extern void psig(void);
 extern int fuword(caddr_t addr);
@@ -79,7 +79,7 @@ void trap(uint32_t *frame) {
     /* Debug print for traps: avoid IRQ/0x80 spam */
     trapno = frame[TRAPNO];
     if (trapno != 0x80 && !(trapno >= 32 && trapno < 48)) {
-        printf("TRAP: %d EIP=%x CS=%x\n", trapno, frame[EIP], frame[CS]);
+        kprintf("TRAP: %d EIP=%x CS=%x\n", trapno, frame[EIP], frame[CS]);
     }
     uint32_t cs;
     uint32_t eflags;
@@ -127,7 +127,7 @@ void trap(uint32_t *frame) {
      * NMI
      */
     case 2:
-        printf("NMI received\n");
+        kprintf("NMI received\n");
         break;
     
     /*
@@ -221,16 +221,16 @@ void trap(uint32_t *frame) {
             uint8_t ti = (err_code >> 2) & 1;
             uint16_t idx = (err_code >> 3) & 0x1FFF;
             
-            printf("GPF: Error code=%x (Ext=%d IDT=%d TI=%d Index=%d)\n", 
+            kprintf("GPF: Error code=%x (Ext=%d IDT=%d TI=%d Index=%d)\n", 
                    err_code, ext, idt, ti, idx);
-            printf("     EIP=%08x CS=%04x EFLAGS=%08x\n", eip, cs, eflags);
-            printf("     ESP=%08x EAX=%08x EBX=%08x ECX=%08x\n",
+            kprintf("     EIP=%08x CS=%04x EFLAGS=%08x\n", eip, cs, eflags);
+            kprintf("     ESP=%08x EAX=%08x EBX=%08x ECX=%08x\n",
                    frame[UESP], frame[EAX], frame[EBX], frame[ECX]);
-            printf("     DS=%04x ES=%04x FS=%04x GS=%04x\n",
+            kprintf("     DS=%04x ES=%04x FS=%04x GS=%04x\n",
                    frame[DS], frame[ES], frame[FS], frame[GS]);
-            printf("     Process: pid=%d p_addr=%x p_size=%x\n",
+            kprintf("     Process: pid=%d p_addr=%x p_size=%x\n",
                    u.u_procp->p_pid, u.u_procp->p_addr, u.u_procp->p_size);
-            printf("     u_base=%x u_count=%x\n", 
+            kprintf("     u_base=%x u_count=%x\n", 
                    (uint32_t)u.u_base, (uint32_t)u.u_count);
             
             /* Deliver SIGSEG */
@@ -238,7 +238,7 @@ void trap(uint32_t *frame) {
             goto signal;
         }
         /* Kernel GPF is fatal */
-        printf("KERNEL GPF - Halting!\n");
+        kprintf("KERNEL GPF - Halting!\n");
         goto kernel_fault;
     
     /*
@@ -331,7 +331,7 @@ void trap(uint32_t *frame) {
         
         /* Call the system call handler */
         trap1(callp->call);
-        /* printf("trap: syscall returned\n"); */
+        /* kprintf("trap: syscall returned\n"); */
         
         /* Handle errors */
         if (u.u_intflg) {
@@ -340,7 +340,7 @@ void trap(uint32_t *frame) {
         
         if (u.u_error) {
             if (u.u_error == ENOSYS) {
-                printf("SYSCALL ENOSYS: nr=%d eax=%x ebx=%x ecx=%x edx=%x esi=%x edi=%x\n",
+                kprintf("SYSCALL ENOSYS: nr=%d eax=%x ebx=%x ecx=%x edx=%x esi=%x edi=%x\n",
                        i, frame[EAX], frame[EBX], frame[ECX], frame[EDX], frame[ESI], frame[EDI]);
             }
             /* Return -errno in EAX for Linux-style syscall ABI */
@@ -372,12 +372,12 @@ void trap(uint32_t *frame) {
             extern void pic_eoi(int irq);
             pic_eoi(trapno - 32);
         } else if (from_user) {
-            printf("TRAP: %d EIP=%x CS=%x EFLAGS=%x ESP=%x EAX=%x EBX=%x ECX=%x EDX=%x\n",
+            kprintf("TRAP: %d EIP=%x CS=%x EFLAGS=%x ESP=%x EAX=%x EBX=%x ECX=%x EDX=%x\n",
                    trapno, eip, cs, eflags, frame[UESP], frame[EAX], frame[EBX], frame[ECX], frame[EDX]);
             sig = SIGSEG;
             goto signal;
         } else {
-            printf("Unknown trap %d from kernel\n", trapno);
+            kprintf("Unknown trap %d from kernel\n", trapno);
         }
         break;
     }
@@ -393,10 +393,10 @@ void trap(uint32_t *frame) {
     goto userret;
 
 kernel_fault:
-    printf("\nKernel fault!\n");
-    printf("Trap: %d  Error: 0x%x\n", trapno, err);
-    printf("EIP:  0x%x  CS: 0x%x\n", eip, cs);
-    printf("EFLAGS: 0x%x\n", eflags);
+    kprintf("\nKernel fault!\n");
+    kprintf("Trap: %d  Error: 0x%x\n", trapno, err);
+    kprintf("EIP:  0x%x  CS: 0x%x\n", eip, cs);
+    kprintf("EFLAGS: 0x%x\n", eflags);
     extern void panic(const char *);
     panic("trap");
 
@@ -412,7 +412,7 @@ userret:
     if (!from_user) {
         u.u_ar0 = prev_ar0;
     }
-    /* printf("trap: returning to user EIP=%x\n", frame[EIP]); */
+    /* kprintf("trap: returning to user EIP=%x\n", frame[EIP]); */
     return;
 }
 
@@ -424,13 +424,13 @@ int trap1(int (*func)(void)) {
     /* Save registers for signals */
     extern int savu(uint32_t *);
     
-    /* printf("trap1: entering, func=%x\n", (uint32_t)func); */
+    /* kprintf("trap1: entering, func=%x\n", (uint32_t)func); */
     savu(u.u_qsav);
-    /* printf("trap1: savu done, calling handler\n"); */
+    /* kprintf("trap1: savu done, calling handler\n"); */
     
     /* Call the handler */
     return (*func)();
-    /* printf("trap1: handler returned\n"); */
+    /* kprintf("trap1: handler returned\n"); */
 }
 
 /*

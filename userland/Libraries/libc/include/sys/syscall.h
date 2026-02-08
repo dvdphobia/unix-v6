@@ -10,6 +10,7 @@
 #define SYS_CLOSE   6
 #define SYS_WAIT    7
 #define SYS_CREAT   8
+#define SYS_GETFBINFO 39
 #define SYS_LSEEK   19
 #define SYS_EXEC    11
 #define SYS_CHDIR   12
